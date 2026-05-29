@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+.env.local
+coverage/
+.DS_Store
+# scratch text extracted from source PDFs
+lib.txt
+plan.txt
