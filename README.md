@@ -1,143 +1,86 @@
 # Agent OS
 
-A standalone, demoable build of **Agent OS** — the conversational surface for
-AgentNexLiFy. A small-business owner talks to one **orchestrator** in plain
-English; the orchestrator routes the ask to the best-fit **worker agent**, which
-produces a draft for approval. This repository implements the full **v1 worker
-agent library** (18 agents across 8 buckets), the agent registry that enforces
-the architectural rules, the shared-context data layer, and an orchestrator with
-the §11 routing rules.
-
-It ships as a self-contained product that runs and tests **offline** (no API keys
-required), with a pluggable LLM provider so a model-backed provider can be wired
-in for a deployed environment. The eventual goal is to merge it into the main
-AgentNexLiFy codebase once it's production-ready.
+The conversational surface for AgentNexLiFy, built as a standalone, demoable
+product. A small-business owner talks to one **orchestrator** in plain English;
+it routes the ask to the best-fit **worker agent**, which runs, streams an honest
+reasoning trace, and produces a draft for approval. The eventual goal is to merge
+it into the main codebase once it's production-ready.
 
 > Source specs live in [`docs/`](docs/): the Worker Agent Library v1 and the
-> Product Plan.
+> Product Plan. The build follows the phased plan; this commit completes
+> **Phase 0 — Skeleton**.
 
----
+## Stack
+
+Next.js 15 (App Router) · TypeScript (strict) · Tailwind + shadcn-style UI ·
+Prisma · `@anthropic-ai/sdk` (Haiku routing / Sonnet drafts) · Auth.js v5 (email
+magic links) · React Query · Zod · Vitest.
+
+The standalone build uses **SQLite** (no DB server needed); production swaps the
+Prisma datasource to Neon/Postgres. When `ANTHROPIC_API_KEY` is unset the model
+client is unavailable and agents degrade honestly (Phase 0's Generalist is
+hard-coded and needs no model).
 
 ## Quick start
 
 ```bash
 npm install
-npm run demo        # scripted showcase against "Sunset Mobile Detailing"
-npm run demo -- "Text Maria to offer her Thursday at 2pm for a consultation."
-npm test            # 168 tests — also the rule-enforcement / CI gate
-npm run typecheck
+cp .env.example .env          # SQLite + demo settings; no SMTP/API key required
+npm run setup                 # prisma generate + db push + seed Sunset Mobile Detailing
+npm run dev                   # http://localhost:3000
 ```
 
-## The three rules (enforced, not aspirational)
+**Log in (demo, no SMTP):** enter `alex@sunsetdetailing.com` and click *Send magic
+link*. The link is printed to the **server console** — open it to sign in. Then in
+the Agent OS chat, type `hello`: you'll see the reasoning trace stream in
+(`route` → `load_business_profile` → `draft_response`) and a draft appear in the
+right panel with Approve/Reject (which log to the console in Phase 0).
 
-These come straight from the QA report on the existing Agent OS and are built in
-at the architectural level. The registry enforces them and **CI fails any agent
-that violates them** (`tests/conformance.test.ts` runs every agent against all
-three).
+Other scripts: `npm run build`, `npm run typecheck`, `npm test`,
+`npm run db:seed`.
 
-1. **No false-success reasoning-trace steps.** A "loaded" step may only render
-   success when the resource actually returned data. Enforced *structurally* by
-   [`TraceBuilder`](src/trace/trace.ts): a load step's status is derived from the
-   data, never asserted by the caller. Verified by running every agent against an
-   empty context and asserting no load reports `ok`
-   ([`findHonestTraceViolations`](src/registry/validate.ts)).
-2. **No `[bracketed placeholders]` for fields that exist in the profile.** Agents
-   resolve fields via [`AgentScratch.field`](src/agents/base.ts), which returns
-   the real value or records a *gap note for the orchestrator chat* — never a
-   placeholder in the customer-facing draft. The registry scans every produced
-   draft ([`findPlaceholderViolations`](src/registry/validate.ts)).
-3. **Every agent declares its channel and respects its formatting.** SMS / post /
-   widget-reply channels must be plain text; email / sequence / report may use
-   markdown. Enforced by [`findChannelViolations`](src/channels.ts) on every run.
+## The three rules (enforced architecturally)
 
-The substrate dependency the spec calls out — wiring signup data into every
-worker's prompt — is modelled by the [shared context](src/context/sharedContext.ts)
-and [business profile](src/profile.ts), which every agent reads.
+From the QA report, built in at the architecture level — see `docs/`.
 
-## Architecture
+1. **No false-success trace steps.** The trace emitter (`src/agents/_trace.ts`)
+   derives a load step's status from the data itself: a step is only `completed`
+   when non-empty evidence is supplied, otherwise `skipped_no_data` / `fallback`.
+   Faking a successful load is structurally impossible.
+2. **No `[bracketed placeholders]` for present profile fields.** Agents read the
+   business profile from the shared context (the substrate fix) and use real
+   values; gaps are surfaced to the orchestrator chat, never the draft.
+3. **Every agent declares its channel and formatting.** Plain-text channels
+   (sms/post/widget_reply) must set `no_markdown`; the schema enforcer
+   (`src/agents/_schema.ts`) rejects violations at load — so a bad agent fails CI.
+
+## Layout (per the build plan §3)
 
 ```
-owner ask ─▶ Orchestrator ─▶ Router (classify + §11 rules) ─▶ Agent Registry ─▶ Worker Agent ─▶ Draft
-                  │                                               │ (validates rules 2 & 3)
-                  └── Wishlist capture (low-confidence asks)      └── reads Shared Context (profile, widget, pipeline, runs, KB)
+prisma/schema.prisma        # data layer: User, BusinessProfile, AgentRun, TraceStep,
+prisma/seed.ts              #   Draft, WidgetConversation, PipelineLead, WishlistItem, ModelCallLog
+src/lib/{db,anthropic,auth,utils}.ts
+src/agents/
+  _schema.ts                # Zod agent schema + the three-rule enforcer
+  _registry.ts              # loads + validates every agent
+  _orchestrator.ts          # routing (Haiku-bound later) + run persistence
+  _shared-context.ts        # loads business_profile, widget history, pipeline…
+  _trace.ts                 # honest reasoning-trace emitter
+  generalist/               # one folder per agent: agent.ts, examples.ts, agent.test.ts
+src/app/
+  page.tsx                  # landing / magic-link login
+  (dashboard)/agent-os/     # the orchestrator chat (task list · chat · draft panel)
+  api/chat/route.ts         # streaming SSE orchestrator endpoint
+  api/drafts/[id]/route.ts  # get / approve / reject
+  api/wishlist/route.ts
+  admin/costs/              # internal cost tracking (every model call logged)
+src/components/{chat,reasoning-trace,draft-panel,ui,auth,dashboard}
 ```
 
-- **Orchestrator** ([src/orchestrator/orchestrator.ts](src/orchestrator/orchestrator.ts)) —
-  applies the §11 routing rules: confidence threshold (→ generalist + wishlist),
-  confidence resolution (→ ask the owner), specialty preference (`$` + "quote" →
-  Quote Follow-up), complaint short-circuit, channel inference, and bucket
-  awareness ("what marketing agents do you have?"). The routing decision is always
-  surfaced to the owner.
-- **Router** ([src/orchestrator/router.ts](src/orchestrator/router.ts)) — a
-  transparent, deterministic keyword/signal scorer (stands in for the Haiku
-  classifier; swappable).
-- **Parameter extraction** ([src/orchestrator/extract.ts](src/orchestrator/extract.ts)) —
-  turns the natural-language ask into typed params for the chosen agent.
-- **Registry** ([src/registry](src/registry)) — validates the §2 schema at
-  registration and enforces rules 2 & 3 on every run.
-- **Shared context** ([src/context](src/context)) — business profile, widget
-  history, pipeline state, agent run history, KB.
-- **LLM provider** ([src/llm](src/llm)) — deterministic by default (offline,
-  reproducible); the Generalist uses `available()` to honor the
-  "service temporarily unavailable → no draft" rule.
+## Roadmap status
 
-## The v1 agent library (18 agents)
-
-| Bucket | Agent | Channel | Status | Priority |
-| --- | --- | --- | --- | --- |
-| Customer Service | Customer Question | widget_reply | existing | P1 |
-| Customer Service | Complaint Handler | widget_reply | new | P3 |
-| Sales | Lead Nurture | sequence | existing | P1 |
-| Sales | Quote Follow-up | sequence | new | P2 |
-| Marketing | Campaign | email | existing | P1 |
-| Marketing | Content Writer | report | new | P2 |
-| Marketing | Social Post | post | new | P2 |
-| Marketing | SEO Recommendations | report | workaround | P3 |
-| Scheduling & Ops | Booking | sms | existing | P1 |
-| Scheduling & Ops | Appointment Reminder | sms | new | P4 |
-| Finance | Quote Generator | email | new | P2 |
-| Finance | Invoice Reminder | email | new | P2 |
-| Finance | Payment Follow-up | sequence | new | P3 |
-| Reputation | Review Request | sms | new | P2 |
-| Reputation | AI Visibility (stub) | report | stub | P3 |
-| Reporting | Weekly Briefing | report | new | P2 |
-| System | Lead Triage | internal | new | P4 |
-| System | Generalist | report | existing | P1 |
-
-### QA-report fixes baked into the agents
-
-- **Customer Question** — empty KB no longer leaks an internal owner-request into
-  the customer draft; it produces a safe holding reply and surfaces the gap to the
-  orchestrator.
-- **Lead Nurture** — relative dates (`Today / +5 / +14`), date-label consistency,
-  real business name in signoffs.
-- **Campaign** — price front-loaded in the subject (≤ 30 chars), respects
-  "keep it short", emoji density is a parameter (default low).
-- **Booking** — markdown stripped from SMS, single frame (propose *or* confirm),
-  never fabricates scheduling state.
-- **Weekly Briefing** — empty sections are omitted entirely, never "none this week".
-- **Generalist** — never produces a silent empty draft; on an unavailable model it
-  produces no draft and an honest notice, and it captures wishlist signal.
-
-## Project layout
-
-```
-src/
-  types.ts            # the §2 agent schema, as enforceable types
-  profile.ts          # business profile + field resolution (rule 2)
-  channels.ts         # channel formatting rules (rule 3)
-  trace/              # honest reasoning trace (rule 1)
-  context/            # shared data layer + sample data
-  registry/           # registry + validation (the rule-enforcement layer)
-  llm/                # pluggable provider (deterministic default)
-  agents/             # the 18 worker agents, one file each, by bucket
-  orchestrator/       # router, param extraction, §11 rules, wishlist
-cli/demo.ts           # runnable demo
-tests/                # conformance + rules + orchestrator + behaviour
-```
-
-## Extending the library
-
-Add an `AgentDefinition` under `src/agents/<bucket>/`, register it in
-`src/agents/index.ts`, and the conformance suite holds it to the same bar
-automatically. If it doesn't conform to the schema or violates a rule, CI fails.
+- **Phase 0 — Skeleton** ✅ running app, DB schema, registry skeleton, hard-coded
+  Generalist routing end-to-end with a streaming trace + draft, cost-logging
+  Anthropic wrapper, `/admin/costs`, seeded demo business.
+- Phase 1+ — substrate fixes and migrating the full 18-agent library into this
+  schema (one agent folder at a time).

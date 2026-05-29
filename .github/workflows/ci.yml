@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
+env:
+  DATABASE_URL: "file:./prisma/dev.db"
+  AUTH_SECRET: "ci-secret"
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -16,7 +20,13 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
+      - name: Prisma generate + create demo DB
+        run: |
+          npx prisma generate
+          npx prisma db push --skip-generate
       - name: Typecheck
         run: npm run typecheck
-      - name: Test (enforces the three agent rules)
+      - name: Test (enforces the agent rules)
         run: npm test
+      - name: Build
+        run: npm run build
