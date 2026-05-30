@@ -184,3 +184,25 @@ model ModelCallLog {
   error        String?
   createdAt    DateTime  @default(now())
 }
+
+// ---------------------------------------------------------------------------
+// Routing decisions — logged for every owner ask. This is the dataset we use to
+// fine-tune the classifier later (input → chosen agent → confidence → accepted).
+// ---------------------------------------------------------------------------
+
+model RoutingDecision {
+  id          String   @id @default(cuid())
+  userId      String
+  runId       String?
+  ask         String
+  classifier  String // haiku | heuristic
+  // routed | ambiguous | wishlist_fallback | owner_override
+  decision    String
+  chosenAgent String
+  confidence  Float    @default(0)
+  alternates  String? // JSON [{agent_id, confidence}]
+  // true unless the owner re-routed away from this choice
+  accepted    Boolean  @default(true)
+  changedTo   String?
+  createdAt   DateTime @default(now())
+}

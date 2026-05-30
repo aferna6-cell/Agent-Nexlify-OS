@@ -82,5 +82,14 @@ src/components/{chat,reasoning-trace,draft-panel,ui,auth,dashboard}
 - **Phase 0 — Skeleton** ✅ running app, DB schema, registry skeleton, hard-coded
   Generalist routing end-to-end with a streaming trace + draft, cost-logging
   Anthropic wrapper, `/admin/costs`, seeded demo business.
-- Phase 1+ — substrate fixes and migrating the full 18-agent library into this
-  schema (one agent folder at a time).
+- **Phase 1 — Orchestrator + registry** ✅ all 18 agents registered (Generalist
+  implemented, the other 17 are "not implemented yet" stubs); the orchestrator
+  classifies with Haiku (structured JSON output) and falls back to a transparent
+  heuristic scorer offline; confidence rules (`<0.5` → wishlist + Generalist;
+  top-two within `0.1` → ask the owner); the routing-decision picker in chat
+  ("I'm picking the X agent — sound right? pick another"); every decision logged
+  to `RoutingDecision`; `/admin/routing` shows the log.
+  Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-routing.ts`
+  (10/10 on the bucket test set; ambiguous + wishlist demonstrated).
+- Phase 2+ — replace the 17 stubs with real implementations, one agent folder at
+  a time, and wire the real Anthropic/Postgres backends.

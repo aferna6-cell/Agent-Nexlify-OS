@@ -1,44 +1,40 @@
 /**
  * Orchestrator.
  *
- * Classifies the owner ask to an agent, creates the AgentRun, loads shared
- * context, runs the agent with a streaming trace emitter, and persists the
- * draft. Phase 0 has a single agent (Generalist), so routing trivially resolves
- * to it; the classifier scaffold is real so later phases plug in Haiku.
+ * Classifies the owner ask (Haiku when available, heuristic otherwise), applies
+ * the confidence rules, runs the chosen agent with a streaming trace, persists
+ * the draft, and logs the routing decision for later fine-tuning.
+ *
+ * Confidence rules:
+ *  - top < 0.5            → fall back to Generalist + capture a wishlist item.
+ *  - second within 0.1    → ambiguous: surface both to the owner, run nothing yet.
+ *  - otherwise            → route to the top agent.
+ *  - forceAgentId         → owner override (re-route after seeing the decision).
  */
 
 import { db } from "../lib/db.js";
 import { loadSharedContext } from "./_shared-context.js";
 import { createTraceEmitter } from "./_trace.js";
 import { registry } from "./_registry.js";
-import type { StreamedTraceStep, AgentOutput } from "../types/agent.js";
+import { classify, type Candidate } from "./_classifier.js";
+import type { AgentOutput, StreamedTraceStep } from "../types/agent.js";
 
-export interface Candidate {
-  agentId: string;
-  confidence: number;
-}
+const CONFIDENCE_FLOOR = 0.5;
+const RESOLUTION_GAP = 0.1;
 
-/** Transparent keyword scorer. Stands in for the Haiku classifier. */
-export function classify(ask: string): Candidate[] {
-  const a = ask.toLowerCase();
-  const scored = registry
-    .routable()
-    .map((agent) => {
-      let score = 0;
-      for (const kw of agent.keywords) if (a.includes(kw.toLowerCase())) score += 1;
-      for (const sig of agent.strong_signals) if (a.includes(sig.toLowerCase())) score += 3;
-      return { agentId: agent.agent_id, score };
-    })
-    .filter((c) => c.score > 0)
-    .sort((x, y) => y.score - x.score)
-    .map((c) => ({ agentId: c.agentId, confidence: Number((c.score / (c.score + 2)).toFixed(3)) }));
-  return scored;
-}
+export type DecisionStatus = "routed" | "needs_clarification" | "wishlist_fallback" | "owner_override";
 
 export interface HandleResult {
-  runId: string;
-  agentId: string;
+  status: DecisionStatus;
+  classifier: "haiku" | "heuristic";
+  decisionId: string;
+  runId?: string;
+  agentId?: string;
   confidence: number;
+  alternates: Candidate[];
+  /** Present for needs_clarification: the two near-tied options. */
+  clarifyBetween?: Candidate[];
+  params: Record<string, unknown>;
   draftId?: string;
   draft?: AgentOutput["draft"];
   orchestratorNotes: string[];
@@ -47,36 +43,129 @@ export interface HandleResult {
 
 export interface HandleOptions {
   onStep?: (step: StreamedTraceStep) => void;
+  /** Owner override: force routing to this agent (re-route from the picker). */
+  forceAgentId?: string;
+  /** When re-routing, mark this prior decision as not accepted. */
+  overrodeDecisionId?: string;
 }
 
-export async function handle(
+export async function handle(userId: string, ask: string, opts: HandleOptions = {}): Promise<HandleResult> {
+  const cls = await classify(ask);
+  const candidates = cls.candidates;
+  const alternates = candidates.slice(1, 4);
+
+  // --- Owner override -------------------------------------------------------
+  if (opts.forceAgentId && registry.has(opts.forceAgentId)) {
+    if (opts.overrodeDecisionId) {
+      await db.routingDecision
+        .update({ where: { id: opts.overrodeDecisionId }, data: { accepted: false, changedTo: opts.forceAgentId } })
+        .catch(() => undefined);
+    }
+    const chosen = candidates.find((c) => c.agentId === opts.forceAgentId)?.confidence ?? 0;
+    return runAndLog(userId, ask, opts.forceAgentId, chosen, candidates, cls.classifier, cls.params, "owner_override", opts.onStep);
+  }
+
+  const top = candidates[0];
+  const second = candidates[1];
+
+  // --- Low confidence → wishlist fallback to the Generalist ------------------
+  if (!top || top.confidence < CONFIDENCE_FLOOR) {
+    await captureWishlist(userId, ask, candidates);
+    const res = await runAndLog(userId, ask, "generalist", top?.confidence ?? 0, candidates, cls.classifier, cls.params, "wishlist_fallback", opts.onStep);
+    const closest = alternates.length
+      ? ` The closest specialists I considered were ${alternates.map((a) => registry.get(a.agentId).display_name).join(" and ")}.`
+      : "";
+    res.orchestratorNotes = [
+      `I don't have a confident match for this, so I saved it to your wishlist and took a general pass.${closest} Want me to try one of those instead?`,
+      ...res.orchestratorNotes,
+    ];
+    return res;
+  }
+
+  // --- Ambiguous (top two within 0.1) → ask the owner ------------------------
+  if (second && top.confidence - second.confidence < RESOLUTION_GAP) {
+    const a = registry.get(top.agentId);
+    const b = registry.get(second.agentId);
+    const decision = await db.routingDecision.create({
+      data: {
+        userId,
+        ask,
+        classifier: cls.classifier,
+        decision: "ambiguous",
+        chosenAgent: top.agentId,
+        confidence: top.confidence,
+        alternates: JSON.stringify(candidates),
+      },
+    });
+    return {
+      status: "needs_clarification",
+      classifier: cls.classifier,
+      decisionId: decision.id,
+      confidence: top.confidence,
+      alternates,
+      clarifyBetween: [candidates[0]!, candidates[1]!],
+      params: cls.params,
+      orchestratorNotes: [
+        `This could be ${a.display_name.toLowerCase()} or ${b.display_name.toLowerCase()} — which did you mean?`,
+      ],
+    };
+  }
+
+  // --- Confident route -------------------------------------------------------
+  return runAndLog(userId, ask, top.agentId, top.confidence, candidates, cls.classifier, cls.params, "routed", opts.onStep);
+}
+
+async function runAndLog(
   userId: string,
   ask: string,
-  opts: HandleOptions = {},
+  agentId: string,
+  confidence: number,
+  candidates: Candidate[],
+  classifier: "haiku" | "heuristic",
+  params: Record<string, unknown>,
+  decisionType: DecisionStatus | "wishlist_fallback",
+  onStep?: (step: StreamedTraceStep) => void,
 ): Promise<HandleResult> {
-  const candidates = classify(ask);
-  // Phase 0 fallback: everything that doesn't match routes to the Generalist.
-  const top = candidates[0];
-  const agentId = top?.agentId ?? "generalist";
-  const confidence = top?.confidence ?? 0;
   const agent = registry.get(agentId);
 
   const run = await db.agentRun.create({
-    data: { userId, agentId, ownerAsk: ask, status: "running" },
+    data: { userId, agentId, ownerAsk: ask, params: JSON.stringify(params), status: "running" },
   });
 
-  const emit = createTraceEmitter(run.id, { onStep: opts.onStep });
-  await emit.work("route", `Routing to the ${agent.display_name} agent`);
+  const decision = await db.routingDecision.create({
+    data: {
+      userId,
+      runId: run.id,
+      ask,
+      classifier,
+      decision: decisionType,
+      chosenAgent: agentId,
+      confidence,
+      alternates: JSON.stringify(candidates),
+    },
+  });
 
+  const emit = createTraceEmitter(run.id, { onStep });
+  await emit.work("route", `Routing to the ${agent.display_name} agent`);
   const context = await loadSharedContext(userId);
 
   let output: AgentOutput;
   try {
-    output = await agent.run({ input: {}, context, emitTrace: emit, ownerAsk: ask, runId: run.id });
+    output = await agent.run({ input: params, context, emitTrace: emit, ownerAsk: ask, runId: run.id });
   } catch (err) {
     await db.agentRun.update({ where: { id: run.id }, data: { status: "failed" } });
     const message = err instanceof Error ? err.message : String(err);
-    return { runId: run.id, agentId, confidence, orchestratorNotes: [`Run failed: ${message}`] };
+    return {
+      status: decisionType === "owner_override" ? "owner_override" : "routed",
+      classifier,
+      decisionId: decision.id,
+      runId: run.id,
+      agentId,
+      confidence,
+      alternates: candidates.slice(1, 4),
+      params,
+      orchestratorNotes: [`Run failed: ${message}`],
+    };
   }
 
   let draftId: string | undefined;
@@ -98,13 +187,42 @@ export async function handle(
     await db.agentRun.update({ where: { id: run.id }, data: { status: "no_draft" } });
   }
 
+  const status: DecisionStatus =
+    decisionType === "owner_override"
+      ? "owner_override"
+      : decisionType === "wishlist_fallback"
+        ? "wishlist_fallback"
+        : "routed";
+
   return {
+    status,
+    classifier,
+    decisionId: decision.id,
     runId: run.id,
     agentId,
     confidence,
+    alternates: candidates.slice(1, 4),
+    params,
     draftId,
     draft: output.draft,
     orchestratorNotes: output.orchestratorNotes,
     noDraftReason: output.noDraftReason,
   };
 }
+
+async function captureWishlist(userId: string, ask: string, candidates: Candidate[]): Promise<void> {
+  const request = ask.trim();
+  const considered = candidates.map((c) => c.agentId).join(",");
+  const existing = await db.wishlistItem.findFirst({ where: { userId, request } });
+  if (existing) {
+    await db.wishlistItem.update({
+      where: { id: existing.id },
+      data: { count: existing.count + 1, lastSeen: new Date(), consideredAgents: considered || existing.consideredAgents },
+    });
+  } else {
+    await db.wishlistItem.create({ data: { userId, request, consideredAgents: considered } });
+  }
+}
+
+export { classify } from "./_classifier.js";
+export type { Candidate } from "./_classifier.js";

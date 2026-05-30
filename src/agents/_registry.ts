@@ -1,16 +1,53 @@
 /**
  * Agent registry — the source of truth for which agents exist.
  *
- * Imports every agent module, validates each against the schema at load
- * (`defineAgent` throws on any violation), and exposes a typed registry to the
- * orchestrator. Phase 0 registers only the Generalist; later phases add one
- * agent folder at a time.
+ * Imports every agent module and validates each against the schema at load
+ * (`defineAgent`/`defineStub` throw on any violation), then exposes a typed
+ * registry to the orchestrator. Phase 1 registers all 18 agents; the Generalist
+ * is implemented, the other 17 are stubs (metadata only) until Phase 2.
  */
 
 import type { Agent, AgentBucket } from "./_schema.js";
-import { generalist } from "./generalist/agent.js";
 
-const AGENTS: Agent[] = [generalist];
+import { generalist } from "./generalist/agent.js";
+import { customerQuestion } from "./customer_question/agent.js";
+import { complaintHandler } from "./complaint_handler/agent.js";
+import { leadNurture } from "./lead_nurture/agent.js";
+import { quoteFollowUp } from "./quote_follow_up/agent.js";
+import { campaign } from "./campaign/agent.js";
+import { contentWriter } from "./content_writer/agent.js";
+import { socialPost } from "./social_post/agent.js";
+import { seoRecommendations } from "./seo_recommendations/agent.js";
+import { booking } from "./booking/agent.js";
+import { appointmentReminder } from "./appointment_reminder/agent.js";
+import { quoteGenerator } from "./quote_generator/agent.js";
+import { invoiceReminder } from "./invoice_reminder/agent.js";
+import { paymentFollowUp } from "./payment_follow_up/agent.js";
+import { reviewRequest } from "./review_request/agent.js";
+import { aiVisibilityStub } from "./ai_visibility_stub/agent.js";
+import { weeklyBriefing } from "./weekly_briefing/agent.js";
+import { leadTriage } from "./lead_triage/agent.js";
+
+const AGENTS: Agent[] = [
+  customerQuestion,
+  complaintHandler,
+  leadNurture,
+  quoteFollowUp,
+  campaign,
+  contentWriter,
+  socialPost,
+  seoRecommendations,
+  booking,
+  appointmentReminder,
+  quoteGenerator,
+  invoiceReminder,
+  paymentFollowUp,
+  reviewRequest,
+  aiVisibilityStub,
+  weeklyBriefing,
+  leadTriage,
+  generalist,
+];
 
 class AgentRegistry {
   private readonly byId = new Map<string, Agent>();

@@ -1,13 +1,22 @@
 /**
  * Streaming orchestrator endpoint.
  *
- * Server-Sent Events: each reasoning-trace step is pushed as it happens, then a
- * `routed` event, optional `notes`, the `draft`, and a terminal `done`. This is
- * what powers the live reasoning-trace UX.
+ * SSE events:
+ *  - step      : a reasoning-trace step, pushed as it happens
+ *  - routed    : the routing decision (agent, confidence, alternates, decisionId)
+ *  - clarify   : ambiguous — two near-tied options for the owner to choose
+ *  - notes     : orchestrator-chat notes
+ *  - draft     : the produced draft
+ *  - no_draft  : the agent produced no draft (e.g. a stub) + reason
+ *  - done / error
+ *
+ * Accepts `forceAgentId` + `overrodeDecisionId` to re-route after the owner
+ * picks a different agent from the decision UI.
  */
 
 import { getCurrentUserId } from "@/lib/auth";
 import { handle } from "@/agents/_orchestrator";
+import { registry } from "@/agents/_registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +26,13 @@ export async function POST(req: Request) {
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
   let ask = "";
+  let forceAgentId: string | undefined;
+  let overrodeDecisionId: string | undefined;
   try {
-    const body = (await req.json()) as { ask?: unknown };
+    const body = (await req.json()) as { ask?: unknown; forceAgentId?: unknown; overrodeDecisionId?: unknown };
     ask = typeof body.ask === "string" ? body.ask.trim() : "";
+    forceAgentId = typeof body.forceAgentId === "string" ? body.forceAgentId : undefined;
+    overrodeDecisionId = typeof body.overrodeDecisionId === "string" ? body.overrodeDecisionId : undefined;
   } catch {
     return new Response("Bad request", { status: 400 });
   }
@@ -30,10 +43,38 @@ export async function POST(req: Request) {
     async start(controller) {
       const send = (event: string, data: unknown) =>
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      const label = (id: string) => registry.get(id).display_name;
       try {
-        const result = await handle(userId, ask, { onStep: (s) => send("step", s) });
-        send("routed", { agentId: result.agentId, confidence: result.confidence });
-        if (result.orchestratorNotes.length > 0) send("notes", { notes: result.orchestratorNotes });
+        const result = await handle(userId, ask, { forceAgentId, overrodeDecisionId, onStep: (s) => send("step", s) });
+
+        if (result.status === "needs_clarification") {
+          send("clarify", {
+            decisionId: result.decisionId,
+            options: (result.clarifyBetween ?? []).map((c) => ({
+              agentId: c.agentId,
+              displayName: label(c.agentId),
+              confidence: c.confidence,
+            })),
+          });
+          if (result.orchestratorNotes.length) send("notes", { notes: result.orchestratorNotes });
+          send("done", {});
+          return;
+        }
+
+        send("routed", {
+          status: result.status,
+          decisionId: result.decisionId,
+          classifier: result.classifier,
+          agentId: result.agentId,
+          displayName: result.agentId ? label(result.agentId) : undefined,
+          confidence: result.confidence,
+          alternates: result.alternates.map((c) => ({
+            agentId: c.agentId,
+            displayName: label(c.agentId),
+            confidence: c.confidence,
+          })),
+        });
+        if (result.orchestratorNotes.length) send("notes", { notes: result.orchestratorNotes });
         if (result.draft && result.draftId) {
           send("draft", {
             id: result.draftId,
