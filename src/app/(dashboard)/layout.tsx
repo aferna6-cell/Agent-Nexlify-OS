@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { demoBypass, DEMO_OWNER_EMAIL } from "@/lib/demo";
 import { SignOutButton } from "@/components/dashboard/sign-out-button";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  if (!session?.user) redirect("/");
+  const bypass = demoBypass();
+  if (!session?.user && !bypass) redirect("/");
+  const email = session?.user?.email ?? DEMO_OWNER_EMAIL;
 
   return (
     <div className="flex h-screen bg-muted">
@@ -13,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="px-4 py-4">
           <div className="text-base font-semibold tracking-tight">Agent OS</div>
           <div className="text-xs text-muted-foreground">
-            {session.user.email}
+            {email}
           </div>
         </div>
         <nav className="flex-1 px-2">

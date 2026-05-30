@@ -14,6 +14,7 @@ import NextAuth from "next-auth";
 import Nodemailer from "next-auth/providers/nodemailer";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { db } from "./db.js";
+import { demoBypass, DEMO_OWNER_EMAIL } from "./demo.js";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
@@ -21,6 +22,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Self-hosted (non-Vercel): trust the configured host. In production set
   // AUTH_URL/NEXTAUTH_URL to the real origin.
   trustHost: true,
+  // A fallback keeps the self-contained demo from throwing when no env is set.
+  // PRODUCTION MUST set a real AUTH_SECRET.
+  secret: process.env.AUTH_SECRET ?? "agent-os-demo-secret-change-in-production",
   pages: { signIn: "/" },
   providers: [
     Nodemailer({
@@ -61,9 +65,8 @@ export async function getCurrentUserId(): Promise<string | null> {
     const user = await db.user.findUnique({ where: { email } });
     if (user) return user.id;
   }
-  if (process.env.AUTH_DEMO_BYPASS === "true") {
-    const demoEmail = process.env.DEMO_OWNER_EMAIL ?? "maya@sunsetauto.com";
-    const demo = await db.user.findUnique({ where: { email: demoEmail } });
+  if (demoBypass()) {
+    const demo = await db.user.findUnique({ where: { email: DEMO_OWNER_EMAIL } });
     if (demo) return demo.id;
   }
   return null;

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
+import { demoBypass } from "@/lib/demo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "@/components/auth/login-form";
 
 export default async function Home() {
   const session = await auth();
-  if (session?.user) redirect("/agent-os");
+  if (session?.user || demoBypass()) redirect("/agent-os");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
