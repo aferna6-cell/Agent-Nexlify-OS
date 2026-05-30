@@ -10,10 +10,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "lint": "next lint",
     "db:push": "prisma db push",
+    "db:push:pg": "prisma db push --schema prisma/schema.postgres.prisma",
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma generate && prisma db push && tsx prisma/seed.ts",
+    "setup:pg": "prisma generate --schema prisma/schema.postgres.prisma && prisma db push --schema prisma/schema.postgres.prisma && tsx prisma/seed.ts",
     "ci": "prisma generate && npm run typecheck && npm run test"
   },
   "prisma": {
@@ -36,6 +39,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.15",

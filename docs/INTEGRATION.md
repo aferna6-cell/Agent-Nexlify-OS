@@ -80,15 +80,26 @@ export function getSharedContextProvider(): SharedContextProvider;
   agents report "no data" by seeing an empty array, and must never throw on a
   cold/empty business.
 
-### 2c. Run/draft persistence
+### 2c. Postgres datasource
+
+The standalone build runs SQLite; production runs Postgres. A ready-to-use
+Postgres schema ships at **`prisma/schema.postgres.prisma`** — identical to the
+SQLite schema except `provider = "postgresql"` (Prisma 6 can't pick the provider
+via `env()`, so it's a separate file; `tests/schema.sync.test.ts` fails CI if the
+two drift). The models are provider-agnostic — **verified end-to-end**: `prisma
+db push` + seed + the orchestrator/agents all run against real Postgres
+(`npm run setup:pg` with a `postgresql://` `DATABASE_URL`). No schema edits are
+required at merge time.
+
+### 2d. Run/draft persistence
 
 The orchestrator currently writes runs, drafts, traces, routing decisions, and
 model-call logs directly via Prisma (`db.*`). For the first production rollout
-**keep these tables** (port the six models in `prisma/schema.prisma` from §1b
-into the production schema with a `agentos_` table prefix). A future cleanup can
-introduce a `RunStore` seam mirroring this one; it is **out of scope for the
-first merge** and not required by the exit criterion. Document chosen: reuse the
-tables, prefixed, behind the production datasource.
+**keep these tables** (port the models from `prisma/schema.postgres.prisma` into
+the production schema, optionally with an `agentos_` table prefix via `@@map`). A
+future cleanup can introduce a `RunStore` seam mirroring this one; it is **out of
+scope for the first merge** and not required by the exit criterion. Decision:
+reuse the tables behind the production datasource.
 
 ---
 
@@ -300,9 +311,10 @@ their **triggers** and **tools**.
 
 A second engineer can complete the merge by doing exactly this:
 
-1. **Port the schema.** Copy the six data models + run/draft/trace/decision/cost
-   models from `prisma/schema.prisma` into the production schema (prefix
-   `agentos_`), pointed at the production datasource. (§2c)
+1. **Port the schema.** Start from `prisma/schema.postgres.prisma` (already
+   `provider = "postgresql"` and verified against real Postgres). Copy its data +
+   run/draft/trace/decision/cost models into the production schema (optionally
+   `@@map`-prefixed `agentos_`), pointed at the production datasource. (§2c)
 2. **Write `ProductionSharedContextProvider`** implementing
    `SharedContextProvider`, using the §5 field mappings. Register it at startup
    with `setSharedContextProvider(...)`.

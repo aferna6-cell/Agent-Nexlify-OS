@@ -45,11 +45,41 @@ in. Then follow [`DEMO.md`](DEMO.md), or try a starter prompt like
 Scripts: `npm run dev` · `build` · `start` · `typecheck` · `test` · `db:seed` ·
 `setup`. End-to-end checks: `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase5.ts`.
 
+### Running on Postgres (production datasource)
+
+The standalone build uses SQLite; production uses Postgres. Because Prisma 6
+can't pick the datasource provider via `env()`, the Postgres datasource lives in
+its own schema file, **`prisma/schema.postgres.prisma`** — byte-for-byte
+identical to `schema.prisma` except `provider = "postgresql"` (a test,
+`tests/schema.sync.test.ts`, fails CI if they ever drift). To run against
+Postgres:
+
+```bash
+export DATABASE_URL="postgresql://user:pass@host:5432/agentos"
+npm run setup:pg        # generate + db push + seed, all against the PG schema
+npm run dev
+```
+
+This path is verified end-to-end (schema push, seed, and the orchestrator/agents
+running against real Postgres).
+
+### Browser E2E tests (Playwright)
+
+```bash
+npm run build && npm run setup     # build + seed dev.db
+npx playwright install chromium
+npm run test:e2e                   # drives the real app (demo-bypass) in Chromium
+```
+
+`e2e/demo.spec.ts` covers the core demo beats (booking → trace → draft →
+approve, the direct widget answer, and the graceful wishlist fallback). Point
+`E2E_BASE_URL` at a running server (e.g. the live deploy) to test it directly.
+
 ## Environment variables
 
 | Var | Required | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | yes | SQLite (`file:./dev.db`) locally; a Postgres/Neon URL in prod (also change the datasource `provider` to `postgresql` in `prisma/schema.prisma`). |
+| `DATABASE_URL` | yes | SQLite (`file:./dev.db`) locally; a Postgres/Neon URL in prod — use `prisma/schema.postgres.prisma` (`npm run setup:pg`), no schema edits needed. |
 | `AUTH_SECRET` | yes | Auth.js session secret (`openssl rand -base64 32`). |
 | `NEXTAUTH_URL` / `AUTH_URL` | prod | The deployed origin. |
 | `EMAIL_SERVER` | prod | SMTP URL for real magic-link email. Unset → link prints to the server console (demo). |
