@@ -105,5 +105,15 @@ src/components/{chat,reasoning-trace,draft-panel,ui,auth,dashboard}
   cost is logged per run either way.
   Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase2.ts`
   (5/5 quality drafts: no placeholders, no SMS markdown, honest traces, cost logged).
-- Phase 3+ — migrate the remaining 12 agents into real implementations and wire
-  the live Anthropic/Postgres backends.
+- **Phase 3 — P2 agents** ✅ seven more real agents: **Content Writer**, **Social
+  Post**, **Review Request** (no fabricated review link), **Invoice Reminder**,
+  **Quote Generator** (itemized `quote_data` → email/report, never auto-send),
+  **Quote Follow-up**, and **Weekly Briefing** (multi-source report that **omits
+  empty sections** — never "none this week"). Routing rule enforced + tested:
+  `$` amount **and** "quote" → Quote Follow-up, else Lead Nurture; "draft a
+  quote" with prices → Quote Generator. **12 agents now implemented** (5 P1 + 7
+  P2); 6 remain as routed stubs.
+  Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase3.ts`
+  (each shipped agent runs 5×, cost-per-run measured, >5×-median anomaly check).
+- Phase 4+ — the remaining agents, then real actions (calendar/email/SMS send)
+  behind permission scopes, and the live Anthropic/Postgres backends.

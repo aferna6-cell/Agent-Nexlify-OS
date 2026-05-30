@@ -62,3 +62,20 @@ describe("ambiguity + wishlist mechanisms", () => {
     expect(c[0]?.confidence ?? 0).toBeLessThan(0.5);
   });
 });
+
+describe("routing rule — quote_follow_up vs lead_nurture vs quote_generator", () => {
+  const top = (ask: string) => classifyHeuristic(ask).candidates[0]?.agentId;
+
+  it("$ amount + 'quote' + follow-up wording → quote_follow_up", () => {
+    expect(top("Follow up with Dana on the $2,400 quote she hasn't booked.")).toBe("quote_follow_up");
+  });
+
+  it("follow-up with no $ and no 'quote' → lead_nurture", () => {
+    expect(top("Follow up with Sarah who went quiet.")).toBe("lead_nurture");
+  });
+
+  it("'draft a quote' with prices (no follow-up wording) → quote_generator, not quote_follow_up", () => {
+    expect(top("Draft a quote for Mike — parts $620, labor $480.")).toBe("quote_generator");
+  });
+});
+
