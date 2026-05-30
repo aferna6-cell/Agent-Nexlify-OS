@@ -71,7 +71,13 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   // --- Low confidence → wishlist fallback to the Generalist ------------------
   if (!top || top.confidence < CONFIDENCE_FLOOR) {
     await captureWishlist(userId, ask, candidates);
-    const res = await runAndLog(userId, ask, "generalist", top?.confidence ?? 0, candidates, cls.classifier, cls.params, "wishlist_fallback", opts.onStep);
+    // Pass the closest specialist to the Generalist so it can offer it (>0.4).
+    const fallbackParams = { ...cls.params };
+    if (top && top.confidence > 0.4) {
+      fallbackParams.nearest_specialist = registry.get(top.agentId).display_name;
+      fallbackParams.nearest_confidence = top.confidence;
+    }
+    const res = await runAndLog(userId, ask, "generalist", top?.confidence ?? 0, candidates, cls.classifier, fallbackParams, "wishlist_fallback", opts.onStep);
     const closest = alternates.length
       ? ` The closest specialists I considered were ${alternates.map((a) => registry.get(a.agentId).display_name).join(" and ")}.`
       : "";
@@ -83,7 +89,9 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   }
 
   // --- Ambiguous (top two within 0.1) → ask the owner ------------------------
-  if (second && top.confidence - second.confidence < RESOLUTION_GAP) {
+  // Round the gap to avoid float artefacts (0.6 - 0.5 = 0.0999…).
+  const gap = second ? Math.round((top.confidence - second.confidence) * 100) / 100 : 1;
+  if (second && gap < RESOLUTION_GAP) {
     const a = registry.get(top.agentId);
     const b = registry.get(second.agentId);
     const decision = await db.routingDecision.create({

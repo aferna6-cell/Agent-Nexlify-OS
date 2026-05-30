@@ -117,7 +117,7 @@ async function logCall(args: {
   try {
     await db.modelCallLog.create({
       data: {
-        runId: args.runId ?? null,
+        runId: args.runId && args.runId.length > 0 ? args.runId : null,
         purpose: args.purpose,
         model: args.model,
         inputTokens: args.inputTokens,

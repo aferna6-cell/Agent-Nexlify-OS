@@ -91,5 +91,19 @@ src/components/{chat,reasoning-trace,draft-panel,ui,auth,dashboard}
   to `RoutingDecision`; `/admin/routing` shows the log.
   Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-routing.ts`
   (10/10 on the bucket test set; ambiguous + wishlist demonstrated).
-- Phase 2+ — replace the 17 stubs with real implementations, one agent folder at
-  a time, and wire the real Anthropic/Postgres backends.
+- **Phase 2 — P1 agents** ✅ the five P1 agents are real implementations with
+  their QA fixes: **Customer Question** (empty-KB safe holding reply, gap surfaced
+  to the orchestrator — never internal text in the draft), **Booking** (single
+  frame per mode, never invents scheduling state, markdown-free SMS), **Lead
+  Nurture** (relative `Today / +5 / +14` dates, consistent labels), **Campaign**
+  (price front-loaded in a ≤30-char subject, respects "keep it short", emoji low
+  by default), and **Generalist** (real fallback — no draft + "service
+  temporarily unavailable" when drafts are down; offers a near specialist `>0.4`).
+  Each has a Zod input schema, a business-profile system prompt, honest traces,
+  channel-correct output, `examples.ts`, and `agent.test.ts`. Drafts use Sonnet
+  when `ANTHROPIC_API_KEY` is set and a deterministic local composer otherwise;
+  cost is logged per run either way.
+  Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase2.ts`
+  (5/5 quality drafts: no placeholders, no SMS markdown, honest traces, cost logged).
+- Phase 3+ — migrate the remaining 12 agents into real implementations and wire
+  the live Anthropic/Postgres backends.
