@@ -5,6 +5,9 @@ Target time: **under 12 minutes**. Everything below works on the seeded demo dat
 with no API key (drafts come from the deterministic local composer; cost shows
 $0). With `ANTHROPIC_API_KEY` set, the same beats produce model-written drafts.
 
+**Live URL:** https://agent-nexlify-os.vercel.app (opens as Maya — demo bypass, no
+login). To run locally instead, follow Setup below.
+
 ## Setup (≈1 min)
 
 ```bash

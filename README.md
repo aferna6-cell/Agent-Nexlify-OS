@@ -10,6 +10,10 @@ it into the main codebase once it's production-ready.
 > Product Plan. The build follows the phased plan. **16 of 18 agents are live**
 > and the app is demo-ready — see [`DEMO.md`](DEMO.md) for the 10-minute walkthrough.
 
+> **Live demo:** https://agent-nexlify-os.vercel.app — opens straight into the
+> orchestrator as Maya (demo bypass; no login). All 6 demo beats run against the
+> seeded Sunset Auto Care data.
+
 ## Stack
 
 Next.js 15 (App Router) · TypeScript (strict) · Tailwind + shadcn-style UI ·

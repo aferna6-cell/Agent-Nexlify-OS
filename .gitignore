@@ -14,3 +14,4 @@ prisma/dev.db-journal
 # scratch text extracted from source PDFs
 lib.txt
 plan.txt
+.vercel
