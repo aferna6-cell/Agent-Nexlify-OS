@@ -54,19 +54,26 @@ Scripts: `npm run dev` · `build` · `start` · `typecheck` · `test` · `db:see
 | `AUTH_DEMO_BYPASS` | demo only | `true` lets the API resolve the seeded owner without a browser session. Set `false`/unset in prod. |
 | `DEMO_OWNER_EMAIL` | demo only | The seeded owner (default `maya@sunsetauto.com`). |
 
-## Deploy (Vercel + Neon)
+## Deploy
 
-1. **Database:** create a Neon (or any Postgres) database; copy its connection string.
-2. In `prisma/schema.prisma` set `datasource db { provider = "postgresql" }`.
-3. Push the schema to the prod DB: `DATABASE_URL=<neon-url> npx prisma db push`,
-   then seed once: `DATABASE_URL=<neon-url> npm run db:seed`.
-4. **Vercel:** import the repo (framework auto-detected; `vercel.json` sets the
-   build command to `prisma generate && next build`).
-5. Set the env vars above in Vercel (Production): `DATABASE_URL`, `AUTH_SECRET`,
-   `AUTH_URL`, `EMAIL_SERVER`/`EMAIL_FROM`, optionally `ANTHROPIC_API_KEY`. Leave
-   `AUTH_DEMO_BYPASS` unset.
-6. Deploy. For a private demo, protect the project with Vercel Password
-   Protection / SSO and share the URL.
+The app is **self-contained on Vercel**: it ships a pre-seeded SQLite database
+(`prisma/demo.db`), copies it to the writable `/tmp` on boot, and enables demo
+bypass (no login) automatically when it detects the Vercel runtime — so a working
+private demo needs **no database and no environment variables**.
+
+**Fastest path — deploy this repo as-is (no DB, no env):**
+```bash
+npx vercel deploy --prod --yes --token=$VERCEL_TOKEN   # creates/links a project, returns a URL
+```
+or connect the GitHub repo to a Vercel project in the dashboard — every push then
+deploys. Either way, protect the project with Vercel Password Protection / SSO for
+a private demo. (No env vars required for the demo; `ANTHROPIC_API_KEY` is optional
+and only upgrades drafts from the local composer to Sonnet.)
+
+**Production path (real auth + shared Postgres):** swap the Prisma datasource to
+`postgresql`, push the schema to Neon (`DATABASE_URL=<neon-url> npx prisma db push`
+then `npm run db:seed`), and set the env vars below in Vercel (and set
+`AUTH_DEMO_BYPASS=false` to require real magic-link login).
 
 ## The three rules (enforced architecturally)
 
