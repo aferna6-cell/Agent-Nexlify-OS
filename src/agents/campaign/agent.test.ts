@@ -39,6 +39,6 @@ describe("campaign", () => {
   it("rule 2 — real business name in signoff", async () => {
     const { output } = await runFromAsk(campaign, "Email blast for $59 spring special.", fullContext());
     expect(output.draft!.body).not.toMatch(/\[Shop Name\]/);
-    expect(output.draft!.body).toContain("Sunset Mobile Detailing");
+    expect(output.draft!.body).toContain("Sunset Auto Care");
   });
 });

@@ -44,6 +44,25 @@ export interface AgentRunHistoryItem {
   createdAt: string;
 }
 
+export interface AppointmentData {
+  id: string;
+  customerName: string;
+  service?: string;
+  scheduledFor: string;
+  status: string;
+  reviewRequested: boolean;
+}
+
+export interface InvoiceData {
+  id: string;
+  customerName: string;
+  number: string;
+  amount: number;
+  issuedAt: string;
+  dueAt: string;
+  status: string;
+}
+
 export interface KbEntry {
   topic: string;
   answer: string;
@@ -54,6 +73,8 @@ export interface SharedContext {
   businessProfile: BusinessProfileData;
   widgetHistory: WidgetConversationData[];
   pipelineLeads: PipelineLeadData[];
+  appointments: AppointmentData[];
+  invoices: InvoiceData[];
   agentRunHistory: AgentRunHistoryItem[];
   kb: KbEntry[];
 }

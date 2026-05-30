@@ -31,11 +31,17 @@ const BADGE: Record<string, string> = {
 };
 
 export default async function RoutingPage() {
-  const decisions = await db.routingDecision.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+  const decisions = await db.routingDecision.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
   const total = decisions.length;
-  const accepted = decisions.filter((d) => d.accepted && d.decision !== "ambiguous").length;
   const overrides = decisions.filter((d) => d.decision === "owner_override").length;
   const wishlist = decisions.filter((d) => d.decision === "wishlist_fallback").length;
+  const ambiguousList = decisions.filter((d) => d.decision === "ambiguous");
+
+  // Routing accuracy: of the decisions that resolved to a route, how many the
+  // owner accepted (didn't re-route). Excludes ambiguous + direct answers.
+  const resolved = decisions.filter((d) => d.decision !== "ambiguous" && d.decision !== "direct_answer");
+  const acceptedCount = resolved.filter((d) => d.accepted).length;
+  const accuracy = resolved.length ? Math.round((acceptedCount / resolved.length) * 100) : 0;
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -51,10 +57,23 @@ export default async function RoutingPage() {
 
       <div className="mt-6 grid grid-cols-4 gap-3">
         <Stat label="Decisions" value={String(total)} />
-        <Stat label="Accepted" value={String(accepted)} />
+        <Stat label="Routing accuracy" value={`${accuracy}%`} />
         <Stat label="Owner overrides" value={String(overrides)} />
         <Stat label="Wishlist fallbacks" value={String(wishlist)} />
       </div>
+
+      {ambiguousList.length > 0 && (
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-sm font-semibold text-amber-900">Needs review — ambiguous routings ({ambiguousList.length})</div>
+          <ul className="mt-2 space-y-1 text-xs text-amber-900">
+            {ambiguousList.slice(0, 8).map((d) => (
+              <li key={d.id}>
+                &ldquo;{d.ask}&rdquo; — {parseAlts(d.alternates).slice(0, 2).map((a) => a.agentId).join(" vs ") || d.chosenAgent}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <table className="mt-6 w-full text-sm">
         <thead>

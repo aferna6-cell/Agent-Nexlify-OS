@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export function LoginForm() {
-  const [email, setEmail] = useState("alex@sunsetdetailing.com");
+  const [email, setEmail] = useState("maya@sunsetauto.com");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 

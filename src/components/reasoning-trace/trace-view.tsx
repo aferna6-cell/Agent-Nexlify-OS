@@ -23,7 +23,7 @@ export function TraceView({ steps }: { steps: StreamedTraceStep[] }) {
   return (
     <ol className="space-y-1 rounded-md border border-border bg-muted/40 p-3 text-xs">
       {steps.map((s, i) => (
-        <li key={i} className="flex gap-2">
+        <li key={i} className="ao-fade-in flex gap-2">
           <span className={COLOR[s.status]}>{ICON[s.status]}</span>
           <span className="text-foreground">{s.description}</span>
         </li>

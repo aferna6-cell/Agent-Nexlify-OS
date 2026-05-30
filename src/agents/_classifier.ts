@@ -35,28 +35,40 @@ function complaintLanguage(ask: string): boolean {
 
 export function classifyHeuristic(ask: string): Classification {
   const a = ask.toLowerCase();
-  const scored = registry
-    .routable()
-    .map((agent) => {
-      let score = 0;
-      for (const kw of agent.keywords) if (a.includes(kw.toLowerCase())) score += 1;
-      for (const sig of agent.strong_signals) if (a.includes(sig.toLowerCase())) score += 3;
-      return { agentId: agent.agent_id, score };
-    })
-    .filter((c) => c.score > 0);
+  // Score every routable agent first (boosts may apply even to a 0-score agent),
+  // then filter to positives.
+  const scored = registry.routable().map((agent) => {
+    let score = 0;
+    for (const kw of agent.keywords) if (a.includes(kw.toLowerCase())) score += 1;
+    for (const sig of agent.strong_signals) if (a.includes(sig.toLowerCase())) score += 3;
+    return { agentId: agent.agent_id, score };
+  });
+
+  // A day-of-week + clock time strongly implies scheduling, even without an
+  // explicit booking keyword ("Mike called wanting a tire rotation Thursday at 10:30").
+  const dayTime =
+    /\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b/i.test(ask) && /\b(\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm))\b/i.test(ask);
+  if (dayTime) {
+    const b = scored.find((c) => c.agentId === "booking");
+    if (b) b.score += 4;
+  }
 
   // §11 rule 6 — complaint language short-circuits Customer Question.
   if (complaintLanguage(ask)) {
     const ch = scored.find((c) => c.agentId === "complaint_handler");
     if (ch) ch.score += 5;
   }
-  // §11 rule 5 — $ amount + "quote" + follow-up wording → Quote Follow-up.
-  if (/\$\s?\d/.test(ask) && a.includes("quote") && /(follow up|follow-up|chase|didn'?t book|hasn'?t booked)/.test(a)) {
+  // §11 rule 5 — "quote" + follow-up wording → Quote Follow-up (the $ amount can
+  // come from pipeline state). Excludes drafting wording so "draft a quote …"
+  // still routes to Quote Generator.
+  const drafting = /(draft (a|an) (quote|estimate)|write up|make a proposal|estimate for)/.test(a);
+  if (a.includes("quote") && /(follow up|follow-up|chase|didn'?t book|hasn'?t booked)/.test(a) && !drafting) {
     const qf = scored.find((c) => c.agentId === "quote_follow_up");
     if (qf) qf.score += 5;
   }
 
   const candidates = scored
+    .filter((c) => c.score > 0)
     .sort((x, y) => y.score - x.score || x.agentId.localeCompare(y.agentId))
     .map((c) => ({ agentId: c.agentId, confidence: Number((c.score / (c.score + 2)).toFixed(3)) }));
 

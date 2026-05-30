@@ -26,7 +26,7 @@ export function DraftPanel({
   const decided = draft.status === "approved" || draft.status === "rejected";
 
   return (
-    <div className="flex h-full w-96 flex-col border-l border-border bg-background">
+    <div className="ao-slide-in flex h-full w-96 flex-col border-l border-border bg-background">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
           <div className="text-sm font-semibold">Draft review</div>

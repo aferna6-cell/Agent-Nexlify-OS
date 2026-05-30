@@ -26,6 +26,7 @@ interface AssistantMessage {
   notes: string[];
   draftId?: string;
   noDraftReason?: string;
+  answer?: string;
   decided?: boolean;
 }
 interface OwnerMessage {
@@ -119,7 +120,8 @@ export function OrchestratorChat() {
             patch((m) => ({ ...m, draftId: d.id }));
             setActiveDraft({ ...d, status: "pending" });
             setTasks((t) => [{ id: d.id, draftId: d.id, title: d.title, status: "pending" }, ...t]);
-          } else if (event === "no_draft") patch((m) => ({ ...m, noDraftReason: p.reason }));
+          } else if (event === "answer") patch((m) => ({ ...m, answer: p.text }));
+          else if (event === "no_draft") patch((m) => ({ ...m, noDraftReason: p.reason }));
           else if (event === "error") patch((m) => ({ ...m, notes: [...m.notes, `Error: ${p.message}`] }));
         }
       }
@@ -195,9 +197,28 @@ export function OrchestratorChat() {
       <div className="flex flex-1 flex-col">
         <div className="flex-1 space-y-4 overflow-auto px-6 py-4">
           {messages.length === 0 && (
-            <div className="mx-auto max-w-lg pt-10 text-center text-sm text-muted-foreground">
-              Talk to your AI. Try <span className="font-medium">&ldquo;Text Maria to confirm Saturday 10am&rdquo;</span> or{" "}
-              <span className="font-medium">&ldquo;run my weekly briefing&rdquo;</span>.
+            <div className="mx-auto max-w-lg pt-12 text-center">
+              <div className="text-base font-semibold">Run your shop by talking to your AI</div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Describe what you need in plain English — the orchestrator picks the right agent, shows
+                its work, and drafts it for your approval.
+              </p>
+              <div className="mt-4 flex flex-col items-stretch gap-2 text-left">
+                {[
+                  "Mike Johnson called wanting a tire rotation Thursday at 10:30.",
+                  "What came in through the widget yesterday?",
+                  "Follow up with Sarah Chen on her brake quote.",
+                  "Show me my weekly briefing.",
+                ].map((s) => (
+                  <button
+                    key={s}
+                    className="rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
+                    onClick={() => setInput(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {messages.map((m, i) =>
@@ -242,8 +263,13 @@ export function OrchestratorChat() {
                   </div>
                 )}
                 <TraceView steps={m.steps} />
+                {m.answer && (
+                  <div className="ao-fade-in whitespace-pre-wrap rounded-lg border border-border bg-card px-3 py-2 text-sm">
+                    {m.answer}
+                  </div>
+                )}
                 {m.notes.map((n, j) => (
-                  <div key={j} className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <div key={j} className="ao-fade-in rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     {n}
                   </div>
                 ))}

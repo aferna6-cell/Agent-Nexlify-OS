@@ -35,6 +35,25 @@ function buildSections(ctx: SharedContext): Section[] {
     sections.push({ heading: "Leads", content: lines.join(" ") });
   }
 
+  if (ctx.appointments.length > 0) {
+    const booked = ctx.appointments.filter((ap) => ap.status === "scheduled").length;
+    const completed = ctx.appointments.filter((ap) => ap.status === "completed").length;
+    const noShow = ctx.appointments.filter((ap) => ap.status === "no_show").length;
+    const parts: string[] = [];
+    if (booked) parts.push(`${booked} upcoming`);
+    if (completed) parts.push(`${completed} completed`);
+    if (noShow) parts.push(`${noShow} no-show(s)`);
+    if (parts.length) sections.push({ heading: "Appointments", content: parts.join(", ") + "." });
+  }
+
+  if (ctx.invoices.length > 0) {
+    const overdue = ctx.invoices.filter((iv) => iv.status === "overdue" || iv.status === "unpaid");
+    if (overdue.length) {
+      const total = overdue.reduce((s, iv) => s + iv.amount, 0);
+      sections.push({ heading: "Finance", content: `${overdue.length} outstanding invoice(s) totaling $${total.toLocaleString("en-US")}.` });
+    }
+  }
+
   if (ctx.agentRunHistory.length > 0) {
     const approved = ctx.agentRunHistory.filter((r) => r.status === "approved" || r.status === "sent").length;
     sections.push({ heading: "Drafts & sends", content: `${ctx.agentRunHistory.length} agent run(s); ${approved} approved/sent.` });

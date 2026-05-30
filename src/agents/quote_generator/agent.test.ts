@@ -24,7 +24,7 @@ describe("quote_generator", () => {
 
   it("uses real business contact info, no placeholders", async () => {
     const { output } = await runFromAsk(quoteGenerator, "Draft a quote for Mike — parts $620, labor $480.", fullContext());
-    expect(output.draft!.body).toContain("Sunset Mobile Detailing");
+    expect(output.draft!.body).toContain("Sunset Auto Care");
     expect(output.draft!.body).not.toMatch(/\[Shop Name\]|\[Phone\]/);
   });
 

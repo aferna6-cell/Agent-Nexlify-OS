@@ -47,6 +47,12 @@ export async function POST(req: Request) {
       try {
         const result = await handle(userId, ask, { forceAgentId, overrodeDecisionId, onStep: (s) => send("step", s) });
 
+        if (result.status === "direct_answer") {
+          send("answer", { text: result.answer ?? "" });
+          send("done", {});
+          return;
+        }
+
         if (result.status === "needs_clarification") {
           send("clarify", {
             decisionId: result.decisionId,

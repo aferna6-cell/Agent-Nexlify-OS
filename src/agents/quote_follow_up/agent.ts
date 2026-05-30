@@ -16,8 +16,13 @@ const Input = z.object({
 });
 
 function scopeOf(ask: string): string | undefined {
-  const m = ask.match(/(?:the\s+)?\$?[\d,]*\s*([a-z][a-z \-]+?)\s+quote/i);
-  if (m && m[1] && m[1].trim().length > 2) return m[1].trim();
+  // The one or two words immediately before "quote" (e.g. "brake quote" → "brake").
+  const m = ask.match(/\b([a-z]+(?:\s[a-z]+)?)\s+quote\b/i);
+  const stop = new Set(["the", "her", "his", "their", "on", "a", "an", "this", "that", "your", "our"]);
+  if (m && m[1]) {
+    const words = m[1].trim().split(/\s+/).filter((w) => !stop.has(w.toLowerCase()));
+    if (words.length) return words.join(" ");
+  }
   return undefined;
 }
 
@@ -46,8 +51,12 @@ export const quoteFollowUp = defineAgent(
     const p = Input.safeParse(input);
     const params = p.success ? p.data : {};
     const customerName = params.customer_name?.trim();
-    const amount = params.quote_amount ?? params.amount ?? 0;
-    const scope = params.quote_scope?.trim() || scopeOf(ownerAsk) || "the work we discussed";
+    // Look up the quote in pipeline state when the ask doesn't carry a $ amount.
+    const lead = customerName
+      ? context.pipelineLeads.find((l) => l.name.toLowerCase().includes(customerName.toLowerCase()) && l.quoteAmount)
+      : undefined;
+    const amount = params.quote_amount ?? params.amount ?? lead?.quoteAmount ?? 0;
+    const scope = params.quote_scope?.trim() || lead?.subject || scopeOf(ownerAsk) || "the work we discussed";
     const touchCount = Math.min(Math.max(params.touch_count ?? 3, 1), 3);
     const name = customerName ?? "there";
     const amt = money(amount);

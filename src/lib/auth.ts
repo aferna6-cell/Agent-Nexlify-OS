@@ -62,7 +62,7 @@ export async function getCurrentUserId(): Promise<string | null> {
     if (user) return user.id;
   }
   if (process.env.AUTH_DEMO_BYPASS === "true") {
-    const demoEmail = process.env.DEMO_OWNER_EMAIL ?? "alex@sunsetdetailing.com";
+    const demoEmail = process.env.DEMO_OWNER_EMAIL ?? "maya@sunsetauto.com";
     const demo = await db.user.findUnique({ where: { email: demoEmail } });
     if (demo) return demo.id;
   }

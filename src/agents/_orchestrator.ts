@@ -22,7 +22,7 @@ import type { AgentOutput, StreamedTraceStep } from "../types/agent.js";
 const CONFIDENCE_FLOOR = 0.5;
 const RESOLUTION_GAP = 0.1;
 
-export type DecisionStatus = "routed" | "needs_clarification" | "wishlist_fallback" | "owner_override";
+export type DecisionStatus = "routed" | "needs_clarification" | "wishlist_fallback" | "owner_override" | "direct_answer";
 
 export interface HandleResult {
   status: DecisionStatus;
@@ -39,6 +39,8 @@ export interface HandleResult {
   draft?: AgentOutput["draft"];
   orchestratorNotes: string[];
   noDraftReason?: string;
+  /** Set for direct_answer: the orchestrator's own answer (no agent involved). */
+  answer?: string;
 }
 
 export interface HandleOptions {
@@ -50,6 +52,17 @@ export interface HandleOptions {
 }
 
 export async function handle(userId: string, ask: string, opts: HandleOptions = {}): Promise<HandleResult> {
+  // --- Direct answer: widget-activity questions the orchestrator answers itself
+  // (no worker agent), per the product plan's "what came in through the widget?".
+  if (!opts.forceAgentId && isWidgetQuery(ask)) {
+    const ctx = await loadSharedContext(userId);
+    const answer = summarizeWidget(ctx);
+    const decision = await db.routingDecision.create({
+      data: { userId, ask, classifier: "heuristic", decision: "direct_answer", chosenAgent: "orchestrator", confidence: 1 },
+    });
+    return { status: "direct_answer", classifier: "heuristic", decisionId: decision.id, confidence: 1, alternates: [], params: {}, orchestratorNotes: [], answer };
+  }
+
   const cls = await classify(ask);
   const candidates = cls.candidates;
   const alternates = candidates.slice(1, 4);
@@ -226,6 +239,27 @@ async function runAndLog(
     orchestratorNotes: output.orchestratorNotes,
     noDraftReason: output.noDraftReason,
   };
+}
+
+/** Detects questions about widget activity that the orchestrator answers directly. */
+export function isWidgetQuery(ask: string): boolean {
+  const a = ask.toLowerCase();
+  return /\bwidget\b/.test(a) && /(came in|come in|yesterday|today|this week|recent|capture|happened|new|leads?|chats?|conversations?|messages?)/.test(a);
+}
+
+/** Summarises recent widget conversations for a direct orchestrator answer. */
+function summarizeWidget(ctx: import("../types/agent.js").SharedContext): string {
+  const convos = ctx.widgetHistory;
+  if (convos.length === 0) {
+    return "Nothing came in through the widget recently — no captured conversations yet.";
+  }
+  const byIntent = new Map<string, number>();
+  for (const c of convos) byIntent.set(c.intent ?? "other", (byIntent.get(c.intent ?? "other") ?? 0) + 1);
+  const breakdown = [...byIntent.entries()].map(([k, n]) => `${n} ${k.replace(/_/g, " ")}`).join(", ");
+  const lines = convos
+    .slice(0, 6)
+    .map((c) => `• ${c.contactName ?? "Someone"}${c.intent ? ` (${c.intent.replace(/_/g, " ")})` : ""}: ${c.summary}`);
+  return `Here's what came in through the widget — ${convos.length} conversation(s) [${breakdown}]:\n${lines.join("\n")}`;
 }
 
 /** Complaint-language detection (short-circuits routing to the Complaint Handler). */

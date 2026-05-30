@@ -23,7 +23,7 @@ const ASKS: { ask: string; expected: string }[] = [
 ];
 
 async function main() {
-  const user = await db.user.findUniqueOrThrow({ where: { email: "alex@sunsetdetailing.com" } });
+  const user = await db.user.findUniqueOrThrow({ where: { email: "maya@sunsetauto.com" } });
   let correct = 0;
   console.log("\n— 10 bucket asks —");
   for (const { ask, expected } of ASKS) {

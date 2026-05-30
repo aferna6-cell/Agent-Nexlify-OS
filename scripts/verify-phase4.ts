@@ -25,7 +25,7 @@ const RUNS = 5;
 const noop: TraceEmitter = { async emit() { return true; }, async work() {}, async fallback() {} };
 
 async function main() {
-  const user = await db.user.findUniqueOrThrow({ where: { email: "alex@sunsetdetailing.com" } });
+  const user = await db.user.findUniqueOrThrow({ where: { email: "maya@sunsetauto.com" } });
   const ctx = await loadSharedContext(user.id);
   await db.user.update({ where: { id: user.id }, data: { aiVisibilityInterest: false } }); // reset for the test
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classifyHeuristic } from "./_classifier.js";
 import { registry } from "./_registry.js";
+import { isWidgetQuery } from "./_orchestrator.js";
 
 /** One representative ask per bucket (the Phase 1 exit-criterion test set). */
 const BUCKET_ASKS: { ask: string; expected: string }[] = [
@@ -76,6 +77,21 @@ describe("routing rule — quote_follow_up vs lead_nurture vs quote_generator", 
 
   it("'draft a quote' with prices (no follow-up wording) → quote_generator, not quote_follow_up", () => {
     expect(top("Draft a quote for Mike — parts $620, labor $480.")).toBe("quote_generator");
+  });
+
+  it("follow up on a named quote without a $ amount → quote_follow_up (Beat 3)", () => {
+    expect(top("Follow up with Sarah Chen on her brake quote.")).toBe("quote_follow_up");
+  });
+});
+
+describe("orchestrator direct-answer detection (Beat 2)", () => {
+  it("recognises widget-activity questions", () => {
+    expect(isWidgetQuery("What came in through the widget yesterday?")).toBe(true);
+    expect(isWidgetQuery("show me the widget conversations this week")).toBe(true);
+  });
+  it("does not hijack ordinary asks", () => {
+    expect(isWidgetQuery("Draft a quote for Mike")).toBe(false);
+    expect(isWidgetQuery("Run my weekly briefing")).toBe(false);
   });
 });
 

@@ -16,7 +16,7 @@ describe("customer_question", () => {
   it("QA fix — empty KB yields a safe holding reply, never internal back-channel text", async () => {
     const { output } = await runAgent(customerQuestion, { customer_question: "Do you handle hybrids?" }, fullContext());
     const body = output.draft!.body;
-    expect(body).toContain("Sunset Mobile Detailing"); // real business name
+    expect(body).toContain("Sunset Auto Care"); // real business name
     expect(body).not.toMatch(/knowledge base|business profile|could you (please )?share/i);
     // The gap is surfaced to the orchestrator, not the customer.
     expect(output.orchestratorNotes.join("\n")).toMatch(/knowledge base/i);

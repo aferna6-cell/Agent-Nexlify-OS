@@ -13,6 +13,10 @@ const STOPWORDS = new Set([
 ]);
 
 function extractName(ask: string): string | undefined {
+  // Leading "Firstname [Lastname] <action-verb>" (e.g. "Mike Johnson called …").
+  const lead = ask.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)\s+(?:called|wants?|wanted|needs?|asked|emailed|texted|reached out|stopped by)/);
+  if (lead) return lead[1];
+
   const tokens = ask.split(/\s+/);
   for (let i = 0; i < tokens.length - 1; i++) {
     const w = tokens[i]!.toLowerCase().replace(/[^a-z]/g, "");
@@ -45,7 +49,7 @@ function extractPlatform(ask: string): string | undefined {
 
 function extractSlot(ask: string): string | undefined {
   const day = ask.match(/\b((?:mon|tues|wednes|thurs|fri|satur|sun)day|tomorrow)\b/i);
-  const time = ask.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
+  const time = ask.match(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))\b/i);
   const d = day ? day[1]![0]!.toUpperCase() + day[1]!.slice(1).toLowerCase() : undefined;
   const t = time ? time[1]!.replace(/\s+/g, "").toLowerCase() : undefined;
   if (d && t) return `${d} at ${t}`;

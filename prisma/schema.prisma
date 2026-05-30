@@ -113,6 +113,29 @@ model PipelineLead {
   createdAt       DateTime @default(now())
 }
 
+model Appointment {
+  id             String   @id @default(cuid())
+  userId         String
+  customerName   String
+  service        String?
+  scheduledFor   DateTime
+  status         String // scheduled | completed | no_show | cancelled
+  reviewRequested Boolean @default(false)
+  createdAt      DateTime @default(now())
+}
+
+model Invoice {
+  id           String   @id @default(cuid())
+  userId       String
+  customerName String
+  number       String
+  amount       Float
+  issuedAt     DateTime
+  dueAt        DateTime
+  status       String // paid | unpaid | overdue
+  createdAt    DateTime @default(now())
+}
+
 // ---------------------------------------------------------------------------
 // Agent runs, traces, drafts
 // ---------------------------------------------------------------------------

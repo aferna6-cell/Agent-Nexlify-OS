@@ -34,10 +34,12 @@ function toProfile(row: Awaited<ReturnType<typeof db.businessProfile.findUnique>
 }
 
 export async function loadSharedContext(userId: string): Promise<SharedContext> {
-  const [profileRow, widget, leads, runs] = await Promise.all([
+  const [profileRow, widget, leads, appts, invoices, runs] = await Promise.all([
     db.businessProfile.findUnique({ where: { userId } }),
     db.widgetConversation.findMany({ where: { userId }, orderBy: { closedAt: "desc" }, take: 50 }),
     db.pipelineLead.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 100 }),
+    db.appointment.findMany({ where: { userId }, orderBy: { scheduledFor: "desc" }, take: 100 }),
+    db.invoice.findMany({ where: { userId }, orderBy: { dueAt: "desc" }, take: 100 }),
     db.agentRun.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 50, include: { draft: true } }),
   ]);
 
@@ -62,6 +64,23 @@ export async function loadSharedContext(userId: string): Promise<SharedContext> 
       subject: l.subject ?? undefined,
       quoteAmount: l.quoteAmount ?? undefined,
       lastContactDate: l.lastContactDate?.toISOString(),
+    })),
+    appointments: appts.map((ap) => ({
+      id: ap.id,
+      customerName: ap.customerName,
+      service: ap.service ?? undefined,
+      scheduledFor: ap.scheduledFor.toISOString(),
+      status: ap.status,
+      reviewRequested: ap.reviewRequested,
+    })),
+    invoices: invoices.map((iv) => ({
+      id: iv.id,
+      customerName: iv.customerName,
+      number: iv.number,
+      amount: iv.amount,
+      issuedAt: iv.issuedAt.toISOString(),
+      dueAt: iv.dueAt.toISOString(),
+      status: iv.status,
     })),
     agentRunHistory: runs.map((r) => ({
       agentId: r.agentId,

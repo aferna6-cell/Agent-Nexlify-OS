@@ -30,6 +30,6 @@ describe("lead_nurture", () => {
   it("rule 2 — real business name in signoff, no [Shop Name]", async () => {
     const { output } = await runFromAsk(leadNurture, "Follow up with Sarah about a consultation.", fullContext());
     expect(output.draft!.body).not.toMatch(/\[Shop Name\]|\[Your Name\]/);
-    expect(output.draft!.body).toContain("Sunset Mobile Detailing");
+    expect(output.draft!.body).toContain("Sunset Auto Care");
   });
 });

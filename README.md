@@ -7,8 +7,8 @@ reasoning trace, and produces a draft for approval. The eventual goal is to merg
 it into the main codebase once it's production-ready.
 
 > Source specs live in [`docs/`](docs/): the Worker Agent Library v1 and the
-> Product Plan. The build follows the phased plan; this commit completes
-> **Phase 0 — Skeleton**.
+> Product Plan. The build follows the phased plan. **16 of 18 agents are live**
+> and the app is demo-ready — see [`DEMO.md`](DEMO.md) for the 10-minute walkthrough.
 
 ## Stack
 
@@ -16,28 +16,57 @@ Next.js 15 (App Router) · TypeScript (strict) · Tailwind + shadcn-style UI ·
 Prisma · `@anthropic-ai/sdk` (Haiku routing / Sonnet drafts) · Auth.js v5 (email
 magic links) · React Query · Zod · Vitest.
 
-The standalone build uses **SQLite** (no DB server needed); production swaps the
-Prisma datasource to Neon/Postgres. When `ANTHROPIC_API_KEY` is unset the model
-client is unavailable and agents degrade honestly (Phase 0's Generalist is
-hard-coded and needs no model).
+The standalone build uses **SQLite** (no DB server needed) and a **deterministic
+local composer** for drafts, so everything runs and tests **offline with no API
+key**. Production swaps the Prisma datasource to Neon/Postgres and sets
+`ANTHROPIC_API_KEY` to use real Haiku/Sonnet — the same code path, with cost
+logged per call.
 
-## Quick start
+## Quick start (clone → running in ~10 minutes)
 
 ```bash
+git clone <repo> && cd agent-os
 npm install
 cp .env.example .env          # SQLite + demo settings; no SMTP/API key required
-npm run setup                 # prisma generate + db push + seed Sunset Mobile Detailing
+npm run setup                 # prisma generate + db push + seed Sunset Auto Care
 npm run dev                   # http://localhost:3000
 ```
 
-**Log in (demo, no SMTP):** enter `alex@sunsetdetailing.com` and click *Send magic
-link*. The link is printed to the **server console** — open it to sign in. Then in
-the Agent OS chat, type `hello`: you'll see the reasoning trace stream in
-(`route` → `load_business_profile` → `draft_response`) and a draft appear in the
-right panel with Approve/Reject (which log to the console in Phase 0).
+**Log in (demo, no SMTP):** the email is pre-filled (`maya@sunsetauto.com`) — click
+*Send magic link*. The link is printed to the **server console** — open it to sign
+in. Then follow [`DEMO.md`](DEMO.md), or try a starter prompt like
+*"Show me my weekly briefing."*
 
-Other scripts: `npm run build`, `npm run typecheck`, `npm test`,
-`npm run db:seed`.
+Scripts: `npm run dev` · `build` · `start` · `typecheck` · `test` · `db:seed` ·
+`setup`. End-to-end checks: `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase5.ts`.
+
+## Environment variables
+
+| Var | Required | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | SQLite (`file:./dev.db`) locally; a Postgres/Neon URL in prod (also change the datasource `provider` to `postgresql` in `prisma/schema.prisma`). |
+| `AUTH_SECRET` | yes | Auth.js session secret (`openssl rand -base64 32`). |
+| `NEXTAUTH_URL` / `AUTH_URL` | prod | The deployed origin. |
+| `EMAIL_SERVER` | prod | SMTP URL for real magic-link email. Unset → link prints to the server console (demo). |
+| `EMAIL_FROM` | prod | From-address for magic links. |
+| `ANTHROPIC_API_KEY` | optional | Enables real Haiku routing + Sonnet drafts. Unset → deterministic local composer ($0). |
+| `ANTHROPIC_MODEL_ROUTING` / `ANTHROPIC_MODEL_DRAFT` | optional | Model overrides (default Haiku 4.5 / Sonnet 4.6). |
+| `AUTH_DEMO_BYPASS` | demo only | `true` lets the API resolve the seeded owner without a browser session. Set `false`/unset in prod. |
+| `DEMO_OWNER_EMAIL` | demo only | The seeded owner (default `maya@sunsetauto.com`). |
+
+## Deploy (Vercel + Neon)
+
+1. **Database:** create a Neon (or any Postgres) database; copy its connection string.
+2. In `prisma/schema.prisma` set `datasource db { provider = "postgresql" }`.
+3. Push the schema to the prod DB: `DATABASE_URL=<neon-url> npx prisma db push`,
+   then seed once: `DATABASE_URL=<neon-url> npm run db:seed`.
+4. **Vercel:** import the repo (framework auto-detected; `vercel.json` sets the
+   build command to `prisma generate && next build`).
+5. Set the env vars above in Vercel (Production): `DATABASE_URL`, `AUTH_SECRET`,
+   `AUTH_URL`, `EMAIL_SERVER`/`EMAIL_FROM`, optionally `ANTHROPIC_API_KEY`. Leave
+   `AUTH_DEMO_BYPASS` unset.
+6. Deploy. For a private demo, protect the project with Vercel Password
+   Protection / SSO and share the URL.
 
 ## The three rules (enforced architecturally)
 
@@ -127,6 +156,16 @@ src/components/{chat,reasoning-trace,draft-panel,ui,auth,dashboard}
   System/P4 agents (Lead Triage, Appointment Reminder) are deferred — they depend
   on triggers/tools that land at production merge.
   Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase4.ts`.
-- Phase 5+ — the deferred trigger/tool-dependent agents, then real actions
-  (calendar/email/SMS send) behind permission scopes, and the live
-  Anthropic/Postgres backends.
+- **Phase 5 — Demo polish + seeding** ✅ demo-ready. Rich seeded dataset (Sunset
+  Auto Care / owner Maya: 10 widget conversations across intents, 5 pipeline
+  leads, 4 appointments, an overdue invoice and an overdue quote); the
+  orchestrator answers **widget-activity questions directly** (no agent); the
+  10-minute [`DEMO.md`](DEMO.md) walkthrough (6 beats); UX polish (animated
+  reasoning trace, draft-panel slide-in, starter prompts); `/admin/costs`
+  (per-agent cost/run + anomaly flag) and `/admin/routing` (accuracy % +
+  ambiguous-cases panel); Vercel/Neon deploy docs.
+  Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase5.ts`
+  (6/6 demo beats behave as scripted).
+- Phase 6+ — production merge: the deferred trigger/tool agents (Lead Triage,
+  Appointment Reminder), real actions (calendar/email/SMS send) behind permission
+  scopes, and the live Anthropic/Postgres backends.

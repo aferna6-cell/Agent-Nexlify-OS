@@ -23,7 +23,7 @@ const ASKS: { ask: string; expect: string }[] = [
 const PLACEHOLDER = /\[(shop name|your name|business name|phone|website|city|owner name)\]/i;
 
 async function main() {
-  const user = await db.user.findUniqueOrThrow({ where: { email: "alex@sunsetdetailing.com" } });
+  const user = await db.user.findUniqueOrThrow({ where: { email: "maya@sunsetauto.com" } });
   const costBefore = await db.modelCallLog.count();
   let pass = 0;
 

@@ -41,6 +41,6 @@ describe("booking", () => {
   it("rule 2 — no [Shop Name]/[Your Name] when those are in the profile", async () => {
     const { output } = await runFromAsk(booking, "Confirm Jake's Saturday 10am appointment.", fullContext());
     expect(output.draft!.body).not.toMatch(/\[Shop Name\]|\[Your Name\]/);
-    expect(output.draft!.body).toContain("Alex"); // real signoff name
+    expect(output.draft!.body).toContain("Maya"); // real signoff name
   });
 });

@@ -20,6 +20,6 @@ describe("content_writer", () => {
   it("rule 2 — no bracketed placeholders", async () => {
     const { output } = await runFromAsk(contentWriter, "Draft an About Us paragraph for our shop.", fullContext());
     expect(output.draft!.body).not.toMatch(/\[[A-Z][^\]]*\]/);
-    expect(output.draft!.body).toContain("Sunset Mobile Detailing");
+    expect(output.draft!.body).toContain("Sunset Auto Care");
   });
 });

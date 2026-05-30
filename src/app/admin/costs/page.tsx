@@ -3,6 +3,7 @@
  * exhaustion is never silent. Basic Phase 0 version: totals + recent calls.
  */
 
+import Link from "next/link";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ function usd(n: number): string {
 }
 
 export default async function CostsPage() {
-  const calls = await db.modelCallLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
+  const calls = await db.modelCallLog.findMany({ orderBy: { createdAt: "desc" }, take: 500, include: { run: true } });
   const totalCost = calls.reduce((s, c) => s + c.costUsd, 0);
   const totalIn = calls.reduce((s, c) => s + c.inputTokens, 0);
   const totalOut = calls.reduce((s, c) => s + c.outputTokens, 0);
@@ -26,11 +27,30 @@ export default async function CostsPage() {
     byModel.set(c.model, m);
   }
 
+  // Per-agent cost-per-run: group draft calls by the run's agent.
+  const byAgent = new Map<string, { runs: Set<string>; cost: number }>();
+  for (const c of calls) {
+    const agentId = c.run?.agentId;
+    if (!agentId) continue;
+    const a = byAgent.get(agentId) ?? { runs: new Set<string>(), cost: 0 };
+    if (c.runId) a.runs.add(c.runId);
+    a.cost += c.costUsd;
+    byAgent.set(agentId, a);
+  }
+  const agentRows = [...byAgent.entries()]
+    .map(([agentId, a]) => ({ agentId, runs: a.runs.size, cost: a.cost, perRun: a.runs.size ? a.cost / a.runs.size : 0 }))
+    .sort((x, y) => y.perRun - x.perRun);
+  const perRunValues = agentRows.map((r) => r.perRun).sort((a, b) => a - b);
+  const medianPerRun = perRunValues[Math.floor(perRunValues.length / 2)] ?? 0;
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
-      <h1 className="text-xl font-semibold">Cost tracking</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Cost tracking</h1>
+        <Link href="/admin/routing" className="text-sm text-accent underline">routing →</Link>
+      </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Every Anthropic call is logged. Routing → Haiku, drafts → Sonnet.
+        Every model call is logged. Routing → Haiku, drafts → Sonnet (cost $0 when the offline local composer is used).
       </p>
 
       <div className="mt-6 grid grid-cols-4 gap-3">
@@ -39,6 +59,38 @@ export default async function CostsPage() {
         <Stat label="Tokens (in/out)" value={`${totalIn}/${totalOut}`} />
         <Stat label="Failures" value={String(failures)} />
       </div>
+
+      <h2 className="mt-8 text-sm font-semibold">By agent (cost per run)</h2>
+      <p className="text-xs text-muted-foreground">Flagged when an agent&rsquo;s cost/run exceeds 5× the median.</p>
+      <table className="mt-2 w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-muted-foreground">
+            <th className="py-2">Agent</th>
+            <th>Runs</th>
+            <th>Total</th>
+            <th>Cost / run</th>
+            <th>Anomaly</th>
+          </tr>
+        </thead>
+        <tbody>
+          {agentRows.length === 0 ? (
+            <tr><td colSpan={5} className="py-3 text-muted-foreground">No agent runs logged yet.</td></tr>
+          ) : (
+            agentRows.map((r) => {
+              const flagged = medianPerRun > 0 && r.perRun > medianPerRun * 5;
+              return (
+                <tr key={r.agentId} className="border-b border-border">
+                  <td className="py-2 font-medium">{r.agentId}</td>
+                  <td>{r.runs}</td>
+                  <td>{usd(r.cost)}</td>
+                  <td>{usd(r.perRun)}</td>
+                  <td className={flagged ? "text-destructive" : "text-muted-foreground"}>{flagged ? "⚠️ investigate" : "ok"}</td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
 
       <h2 className="mt-8 text-sm font-semibold">By model</h2>
       <table className="mt-2 w-full text-sm">

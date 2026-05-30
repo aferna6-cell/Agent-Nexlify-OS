@@ -27,14 +27,14 @@ export function fakeEmitter(): { emitter: TraceEmitter; steps: StreamedTraceStep
 }
 
 export const FULL_PROFILE: BusinessProfileData = {
-  businessName: "Sunset Mobile Detailing",
-  ownerName: "Alex",
-  industry: "auto detailing",
+  businessName: "Sunset Auto Care",
+  ownerName: "Maya",
+  industry: "auto repair",
   city: "Phoenix",
   state: "AZ",
   phone: "(602) 555-0148",
-  email: "alex@sunsetdetailing.com",
-  website: "https://sunsetdetailing.com",
+  email: "maya@sunsetauto.com",
+  website: "https://sunsetauto.com",
   hoursSummary: "Mon–Sat 8am–6pm",
   reviewLinkGoogle: "https://g.page/r/sunset-detailing/review",
 };
@@ -44,6 +44,8 @@ export function fullContext(overrides: Partial<SharedContext> = {}): SharedConte
     businessProfile: FULL_PROFILE,
     widgetHistory: [],
     pipelineLeads: [],
+    appointments: [],
+    invoices: [],
     agentRunHistory: [],
     kb: [],
     ...overrides,
@@ -51,7 +53,7 @@ export function fullContext(overrides: Partial<SharedContext> = {}): SharedConte
 }
 
 export function emptyContext(): SharedContext {
-  return { businessProfile: {}, widgetHistory: [], pipelineLeads: [], agentRunHistory: [], kb: [] };
+  return { businessProfile: {}, widgetHistory: [], pipelineLeads: [], appointments: [], invoices: [], agentRunHistory: [], kb: [] };
 }
 
 export async function runAgent(
