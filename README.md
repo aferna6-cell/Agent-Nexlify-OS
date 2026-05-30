@@ -7,8 +7,9 @@ reasoning trace, and produces a draft for approval. The eventual goal is to merg
 it into the main codebase once it's production-ready.
 
 > Source specs live in [`docs/`](docs/): the Worker Agent Library v1 and the
-> Product Plan. The build follows the phased plan. **16 of 18 agents are live**
+> Product Plan. The build follows the phased plan. **All 18 agents are live**
 > and the app is demo-ready — see [`DEMO.md`](DEMO.md) for the 10-minute walkthrough.
+> For the production-merge contract, see [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
 
 > **Live demo:** https://agent-nexlify-os.vercel.app — opens straight into the
 > orchestrator as Maya (demo bypass; no login). All 6 demo beats run against the

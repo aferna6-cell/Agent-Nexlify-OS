@@ -15,6 +15,7 @@ import Nodemailer from "next-auth/providers/nodemailer";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { db } from "./db.js";
 import { demoBypass, DEMO_OWNER_EMAIL } from "./demo.js";
+import { setAuthProvider, type AuthIdentity, type AuthProvider } from "./providers/auth.js";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
@@ -57,17 +58,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 });
 
-/** Resolve the current owner's user id (or null). */
+/**
+ * Standalone AuthProvider: Auth.js session + the demo bypass.
+ *
+ * Resolves the current owner from the magic-link session, falling back to the
+ * seeded demo owner when AUTH_DEMO_BYPASS is on. In this single-tenant build the
+ * owner *is* the business, so `businessProfileId === userId`. The production
+ * merge replaces this with an implementation that reads the production session
+ * and returns the real business id — see docs/INTEGRATION.md.
+ */
+export class NextAuthProvider implements AuthProvider {
+  async getCurrentIdentity(): Promise<AuthIdentity | null> {
+    const session = await auth();
+    const email = session?.user?.email;
+    if (email) {
+      const user = await db.user.findUnique({ where: { email } });
+      if (user) return { userId: user.id, businessProfileId: user.id };
+    }
+    if (demoBypass()) {
+      const demo = await db.user.findUnique({ where: { email: DEMO_OWNER_EMAIL } });
+      if (demo) return { userId: demo.id, businessProfileId: demo.id };
+    }
+    return null;
+  }
+}
+
+// Register the standalone provider on import.
+setAuthProvider(new NextAuthProvider());
+
+/** Resolve the current owner's user id (or null). Delegates to the AuthProvider. */
 export async function getCurrentUserId(): Promise<string | null> {
-  const session = await auth();
-  const email = session?.user?.email;
-  if (email) {
-    const user = await db.user.findUnique({ where: { email } });
-    if (user) return user.id;
-  }
-  if (demoBypass()) {
-    const demo = await db.user.findUnique({ where: { email: DEMO_OWNER_EMAIL } });
-    if (demo) return demo.id;
-  }
-  return null;
+  const identity = await new NextAuthProvider().getCurrentIdentity();
+  return identity?.userId ?? null;
 }
