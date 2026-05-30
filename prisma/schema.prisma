@@ -28,6 +28,8 @@ model User {
   sessions      Session[]
   profile       BusinessProfile?
   agentRuns     AgentRun[]
+  // Set when the owner expresses interest in the AI Visibility beta (Phase 4 stub).
+  aiVisibilityInterest Boolean    @default(false)
   createdAt     DateTime         @default(now())
 }
 

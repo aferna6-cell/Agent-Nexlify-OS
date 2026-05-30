@@ -115,5 +115,18 @@ src/components/{chat,reasoning-trace,draft-panel,ui,auth,dashboard}
   P2); 6 remain as routed stubs.
   Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase3.ts`
   (each shipped agent runs 5×, cost-per-run measured, >5×-median anomaly check).
-- Phase 4+ — the remaining agents, then real actions (calendar/email/SMS send)
-  behind permission scopes, and the live Anthropic/Postgres backends.
+- **Phase 4 — P3 agents** ✅ four more, with extra design care: **Complaint
+  Handler** (hardcoded `never_auto_send` + always flags red; the orchestrator's
+  complaint detection short-circuits Customer Question for angry messages),
+  **SEO Recommendations** (backed by a real `seo_check` tool — fetch with a 5s
+  timeout, parse title/meta/H1/viewport/alt coverage; honest "Not checked yet"
+  scope), **AI Visibility** (honest early-access stub that tags the owner
+  record `aiVisibilityInterest` for the beta), and **Payment Follow-up** (three
+  escalation levels, hardcoded no-threats / no specific-legal language,
+  `never_auto_send`). **16 agents now implemented** (5 P1 + 7 P2 + 4 P3); the two
+  System/P4 agents (Lead Triage, Appointment Reminder) are deferred — they depend
+  on triggers/tools that land at production merge.
+  Verify with `DATABASE_URL="file:./dev.db" npx tsx scripts/verify-phase4.ts`.
+- Phase 5+ — the deferred trigger/tool-dependent agents, then real actions
+  (calendar/email/SMS send) behind permission scopes, and the live
+  Anthropic/Postgres backends.

@@ -112,4 +112,6 @@ export interface AgentRunArgs {
   ownerAsk: string;
   /** The current agent run id (for model-call cost association). */
   runId: string;
+  /** The owner's user id, when available (for agents that tag the owner record). */
+  userId?: string;
 }

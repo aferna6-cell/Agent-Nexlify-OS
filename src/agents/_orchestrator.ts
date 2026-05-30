@@ -65,6 +65,16 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
     return runAndLog(userId, ask, opts.forceAgentId, chosen, candidates, cls.classifier, cls.params, "owner_override", opts.onStep);
   }
 
+  // --- Complaint detection short-circuits Customer Question (§11 rule 6) ------
+  // Runs regardless of which classifier was used, so an angry message always
+  // reaches the (hardcoded never-auto-send) Complaint Handler.
+  if (detectComplaint(ask)) {
+    const conf = candidates.find((c) => c.agentId === "complaint_handler")?.confidence ?? 0.9;
+    const res = await runAndLog(userId, ask, "complaint_handler", conf, candidates, cls.classifier, cls.params, "routed", opts.onStep);
+    res.orchestratorNotes = ["Detected complaint language, so I routed this straight to the Complaint Handler.", ...res.orchestratorNotes];
+    return res;
+  }
+
   const top = candidates[0];
   const second = candidates[1];
 
@@ -159,7 +169,7 @@ async function runAndLog(
 
   let output: AgentOutput;
   try {
-    output = await agent.run({ input: params, context, emitTrace: emit, ownerAsk: ask, runId: run.id });
+    output = await agent.run({ input: params, context, emitTrace: emit, ownerAsk: ask, runId: run.id, userId });
   } catch (err) {
     await db.agentRun.update({ where: { id: run.id }, data: { status: "failed" } });
     const message = err instanceof Error ? err.message : String(err);
@@ -216,6 +226,11 @@ async function runAndLog(
     orchestratorNotes: output.orchestratorNotes,
     noDraftReason: output.noDraftReason,
   };
+}
+
+/** Complaint-language detection (short-circuits routing to the Complaint Handler). */
+export function detectComplaint(ask: string): boolean {
+  return /(furious|angry|upset|unhappy|disappointed|terrible|awful|worst|ruined|scratch(ed)?|damaged|broke|refund|complaint|complained|unacceptable|fed up|never again)/i.test(ask);
 }
 
 async function captureWishlist(userId: string, ask: string, candidates: Candidate[]): Promise<void> {
