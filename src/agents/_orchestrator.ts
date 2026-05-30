@@ -244,7 +244,12 @@ async function runAndLog(
 /** Detects questions about widget activity that the orchestrator answers directly. */
 export function isWidgetQuery(ask: string): boolean {
   const a = ask.toLowerCase();
-  return /\bwidget\b/.test(a) && /(came in|come in|yesterday|today|this week|recent|capture|happened|new|leads?|chats?|conversations?|messages?)/.test(a);
+  if (!/\bwidget\b/.test(a)) return false;
+  // An ask that wants something *drafted* in response to a forwarded widget
+  // message is a worker-agent task (e.g. Customer Question), not a question
+  // about widget activity — don't intercept it for a direct answer.
+  if (/\b(draft|write|compose|respond|reply|answer this|send|create)\b/.test(a)) return false;
+  return /(came in|come in|yesterday|today|this week|recent|capture|happened|new|leads?|chats?|conversations?|messages?)/.test(a);
 }
 
 /** Summarises recent widget conversations for a direct orchestrator answer. */
