@@ -1,0 +1,20 @@
+node_modules/
+.next/
+dist/
+out/
+*.log
+.env
+.env*.local
+coverage/
+.DS_Store
+# SQLite dev database (local only). prisma/demo.db IS committed on purpose — it's
+# the pre-seeded database shipped for the self-contained Vercel demo.
+prisma/dev.db
+prisma/dev.db-journal
+# scratch text extracted from source PDFs
+lib.txt
+plan.txt
+.vercel
+test-results/
+playwright-report/
+.playwright/

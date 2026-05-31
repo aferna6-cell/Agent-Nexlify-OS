@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-muted text-foreground antialiased;
+}
+
+/* --- UX polish: subtle entrance animations --- */
+@keyframes ao-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.ao-fade-in {
+  animation: ao-fade-in 0.22s ease-out both;
+}
+
+@keyframes ao-slide-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.ao-slide-in {
+  animation: ao-slide-in 0.2s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ao-fade-in, .ao-slide-in { animation: none; }
+}
