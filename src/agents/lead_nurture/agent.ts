@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -40,7 +40,7 @@ export const leadNurture = defineAgent(
     const customerName = params.customer_name?.trim();
     const subject = params.subject?.trim() || "your inquiry";
     const touchCount = Math.min(Math.max(params.touch_count ?? 3, 1), 3);
-    const name = customerName ?? "there";
+    const name = firstName(customerName) ?? "there";
 
     await emitTrace.emit("load_business_profile", {
       description: `Loaded business profile (${presentProfileFields(context.businessProfile).join(", ")})`,

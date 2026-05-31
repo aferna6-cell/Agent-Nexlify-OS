@@ -25,7 +25,9 @@ describe("appointment_reminder", () => {
     expect(output.draft).toBeDefined();
     expect(output.draft!.channel).toBe("sms");
     expect(findMarkdown(output.draft!.body)).toEqual([]);
-    expect(output.draft!.body).toContain("Mike Johnson");
+    // B-11: greet by first name only ("Hi Mike", not "Hi Mike Johnson").
+    expect(output.draft!.body).toMatch(/\bMike\b/);
+    expect(output.draft!.body).not.toContain("Mike Johnson");
     expect(output.draft!.body).toContain("reminder");
     expect(output.draft!.body).toContain("tomorrow");
     expect(output.draft!.body).toContain("appointment");

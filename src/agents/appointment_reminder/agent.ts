@@ -1,5 +1,5 @@
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput, AppointmentData } from "../../types/agent.js";
@@ -81,7 +81,7 @@ export const appointmentReminder = defineAgent(
     const signoff = a.signoff();
     const businessName = a.field("businessName");
     const first = tomorrowsAppointments[0]!;
-    const name = first.customerName?.trim() || "there";
+    const name = firstName(first.customerName) ?? "there";
     const service = first.service?.trim() || "appointment";
     const time = timeLabel(first.scheduledFor);
     const withWho = businessName ?? "us";

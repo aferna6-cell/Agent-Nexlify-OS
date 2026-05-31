@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput, KbEntry, SharedContext } from "../../types/agent.js";
@@ -90,7 +90,7 @@ export const customerQuestion = defineAgent(
       );
     }
 
-    const greeting = customerName ? `Hi ${customerName}!` : "Hi!";
+    const greeting = firstName(customerName) ? `Hi ${firstName(customerName)}!` : "Hi!";
     const thanks = businessName ? `Thanks for reaching out to ${businessName}.` : "Thanks for reaching out.";
 
     const local = (): string => {

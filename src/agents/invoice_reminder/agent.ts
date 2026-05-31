@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody, money } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -62,7 +62,7 @@ export const invoiceReminder = defineAgent(
 
     const signoff = a.signoff();
     const businessName = a.field("businessName");
-    const name = customerName ?? "there";
+    const name = firstName(customerName) ?? "there";
     const invoiceRef = invoiceNumber ? `invoice ${invoiceNumber}` : "your invoice";
     const dateClause = invoiceDate ? ` from ${invoiceDate}` : "";
 

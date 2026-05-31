@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, resolveField } from "../_authoring.js";
+import { Authoring, presentProfileFields, resolveField, firstName } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput, BusinessProfileData } from "../../types/agent.js";
@@ -67,7 +67,7 @@ export const reviewRequest = defineAgent(
 
     const businessName = a.field("businessName");
     const signoff = a.signoff();
-    const name = customerName ?? "there";
+    const name = firstName(customerName) ?? "there";
     const serviceClause = service ? ` with your ${service}` : "";
 
     if (!hasLink) {

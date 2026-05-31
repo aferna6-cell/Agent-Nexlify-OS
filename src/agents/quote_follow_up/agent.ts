@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody, money } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -58,7 +58,7 @@ export const quoteFollowUp = defineAgent(
     const amount = params.quote_amount ?? params.amount ?? lead?.quoteAmount ?? 0;
     const scope = params.quote_scope?.trim() || lead?.subject || scopeOf(ownerAsk) || "the work we discussed";
     const touchCount = Math.min(Math.max(params.touch_count ?? 3, 1), 3);
-    const name = customerName ?? "there";
+    const name = firstName(customerName) ?? "there";
     const amt = money(amount);
 
     await emitTrace.emit("load_business_profile", {

@@ -101,11 +101,15 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
       fallbackParams.nearest_confidence = top.confidence;
     }
     const res = await runAndLog(userId, ask, "generalist", top?.confidence ?? 0, candidates, cls.classifier, fallbackParams, "wishlist_fallback", opts.onStep);
-    const closest = alternates.length
-      ? ` The closest specialists I considered were ${alternates.map((a) => registry.get(a.agentId).display_name).join(" and ")}.`
+    // B-10: only offer alternates that are real specialists — never list
+    // "Generalist" as a considered alternative when we already routed there.
+    const specialistAlts = alternates.filter((a) => a.agentId !== "generalist");
+    const closest = specialistAlts.length
+      ? ` The closest specialists I considered were ${specialistAlts.map((a) => registry.get(a.agentId).display_name).join(" and ")}.`
       : "";
+    const tryPrompt = specialistAlts.length ? " Want me to try one of those instead?" : "";
     res.orchestratorNotes = [
-      `I don't have a confident match for this, so I saved it to your wishlist and took a general pass.${closest} Want me to try one of those instead?`,
+      `I don't have a confident match for this, so I saved it to your wishlist and took a general pass.${closest}${tryPrompt}`,
       ...res.orchestratorNotes,
     ];
     return res;

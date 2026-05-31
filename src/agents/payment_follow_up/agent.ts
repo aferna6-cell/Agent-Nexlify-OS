@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody, money } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -51,7 +51,7 @@ export const paymentFollowUp = defineAgent(
     const customerName = params.customer_name?.trim();
     const amount = params.invoice_amount ?? params.amount ?? 0;
     const level = Math.min(Math.max(params.escalation_level ?? inferLevel(ownerAsk), 1), 3);
-    const name = customerName ?? "there";
+    const name = firstName(customerName) ?? "there";
     const amt = money(amount);
 
     await emitTrace.emit("load_business_profile", {

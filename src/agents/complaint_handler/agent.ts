@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -69,7 +69,7 @@ export const complaintHandler = defineAgent(
     a.note("⚠️ This is a complaint and I've flagged it red for you. I drafted an empathetic reply, but it will ALWAYS need your approval before anything goes out — I never auto-send complaint responses.");
 
     const signoff = a.signoff();
-    const name = customerName ?? "";
+    const name = firstName(customerName) ?? "";
     const greeting = name ? `Hi ${name},` : "Hi,";
     const topic = deriveTopic(complaint);
 
