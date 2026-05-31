@@ -6,6 +6,9 @@
  * checks the report's "Expected" behaviour, and prints a per-agent cost-per-run
  * table (Phase D). Output is written to AgentOS_PostQA_Round2_findings.md.
  *
+ * v2 note: expected routes are now the 8 DEPARTMENT heads (the former v1 workers
+ * are internal skills). Scenario 12 (payroll) lands on the People department.
+ *
  *   DATABASE_URL=file:./dev.db ANTHROPIC_API_KEY=sk-... npx tsx scripts/verify-llm-on.ts
  */
 
@@ -17,39 +20,36 @@ import { isModelAvailable } from "../src/lib/anthropic.js";
 interface Scenario {
   n: number;
   ask: string;
-  expectRoute: string; // agentId, "direct_answer", or "wishlist_fallback"
+  expectRoute: string; // department id, "direct_answer", "declined", or "wishlist_fallback"
   check: (body: string, route: string) => { pass: boolean; detail: string };
 }
 
-const has = (re: RegExp) => (b: string) => re.test(b);
-
 const scenarios: Scenario[] = [
-  { n: 1, ask: "Mike Johnson called wanting a tire rotation Thursday at 10:30.", expectRoute: "booking",
+  { n: 1, ask: "Mike Johnson called wanting a tire rotation Thursday at 10:30.", expectRoute: "operations",
     check: (b) => ({ pass: /Mike/.test(b) && /Sunset Auto Care/.test(b), detail: "name + business signoff" }) },
-  { n: 2, ask: "Draft a booking confirmation SMS for Mike Johnson — tire rotation Thursday at 10:30 AM on his 2019 F-150. Earliest we can do is Thursday; tomorrow is fully booked.", expectRoute: "booking",
+  { n: 2, ask: "Draft a booking confirmation SMS for Mike Johnson — tire rotation Thursday at 10:30 AM on his 2019 F-150. Earliest we can do is Thursday; tomorrow is fully booked.", expectRoute: "operations",
     check: (b) => ({ pass: /F-150/.test(b) && /(fully booked|earliest|Thursday)/i.test(b), detail: "vehicle + scheduling constraint" }) },
   { n: 3, ask: "What came in through the widget yesterday?", expectRoute: "direct_answer",
     check: (b) => ({ pass: /widget/i.test(b), detail: "direct widget summary" }) },
-  { n: 4, ask: "Follow up with Sarah Chen on her brake quote.", expectRoute: "quote_follow_up",
+  { n: 4, ask: "Follow up with Sarah Chen on her brake quote.", expectRoute: "sales",
     check: (b) => ({ pass: /Hi Sarah[,!]/.test(b) && !/Sarah Chen,/.test(b), detail: "first-name greeting" }) },
-  { n: 5, ask: "Show me my weekly briefing.", expectRoute: "weekly_briefing",
-    check: (b) => ({ pass: /Owner attention needed/i.test(b), detail: "attention section present" }) },
-  { n: 6, ask: "Draft an email blast for existing customers announcing our June AC check special: $59 instead of $89, June 1-15. Keep it short. Subject, preheader, body.", expectRoute: "campaign",
-    check: (b) => ({ pass: /\$59/.test(b) && b.length > 200 && !/existing customers announcing/i.test(b), detail: "real marketing copy, not prompt echo" }) },
-  { n: 7, ask: "A widget lead asked: 'Do you guys handle hybrids? I have a 2018 Prius and the battery feels weak.' Draft a response.", expectRoute: "customer_question",
-    check: (_b, r) => ({ pass: r === "customer_question", detail: "routed to Customer Question, not direct-answer" }) },
-  { n: 8, ask: "A customer named Aisha just asked us this question: 'Do you handle hybrids? I have a 2018 Prius with a weak battery.' Please draft a reply I can send back.", expectRoute: "customer_question",
+  { n: 5, ask: "Show me my weekly briefing.", expectRoute: "direct_answer",
+    check: (b) => ({ pass: /Owner attention needed/i.test(b), detail: "cross-department briefing" }) },
+  { n: 6, ask: "Draft an email blast for existing customers announcing our June AC check special: $59 instead of $89, June 1-15. Keep it short. Subject, preheader, body.", expectRoute: "marketing",
+    check: (b) => ({ pass: /\$59|59/.test(b) && b.length > 200 && !/existing customers announcing/i.test(b), detail: "real marketing copy, not prompt echo" }) },
+  { n: 7, ask: "A widget lead asked: 'Do you guys handle hybrids? I have a 2018 Prius and the battery feels weak.' Draft a response.", expectRoute: "customer_service",
+    check: (_b, r) => ({ pass: r === "customer_service", detail: "routed to Customer Service, not direct-answer" }) },
+  { n: 8, ask: "A customer named Aisha just asked us this question: 'Do you handle hybrids? I have a 2018 Prius with a weak battery.' Please draft a reply I can send back.", expectRoute: "customer_service",
     check: (b) => ({ pass: /Hi Aisha/.test(b), detail: "greets Aisha; safe holding reply" }) },
-  { n: 9, ask: "Robert L. just messaged us angry that his recent AC recharge didn't hold. He wants it looked at again. Draft a careful response.", expectRoute: "complaint_handler",
+  { n: 9, ask: "Robert L. just messaged us angry that his recent AC recharge didn't hold. He wants it looked at again. Draft a careful response.", expectRoute: "customer_service",
     check: (b) => ({ pass: /AC/i.test(b), detail: "references AC recharge specifically" }) },
-  { n: 10, ask: "Draft a quote for Mike Johnson: full brake job on his 2019 F-150, parts $620, labor $480, net 15 terms.", expectRoute: "quote_generator",
+  { n: 10, ask: "Draft a quote for Mike Johnson: full brake job on his 2019 F-150, parts $620, labor $480, net 15 terms.", expectRoute: "sales",
     check: (b) => ({ pass: /1,100|1100/.test(b) && /net 15/i.test(b), detail: "totals + terms" }) },
-  { n: 11, ask: "Send Mike Johnson a reminder about his outstanding invoice (8 days overdue, $1,100).", expectRoute: "invoice_reminder",
+  { n: 11, ask: "Send Mike Johnson a reminder about his outstanding invoice (8 days overdue, $1,100).", expectRoute: "invoicing",
     check: (b) => ({ pass: /\$1,100|1100/.test(b), detail: "amount referenced (8-days-overdue ideally)" }) },
-  // Generalist (confident) or wishlist_fallback (low-conf) are both correct: no
-  // specialist exists for payroll, so it lands on the Generalist and is wishlisted.
-  { n: 12, ask: "Help me figure out my quarterly payroll tax filings and remind me when to pay each one.", expectRoute: "generalist",
-    check: (b) => ({ pass: /941|940|quarterly|payroll/i.test(b) && !/Goal\s*\/\s*Approach/i.test(b), detail: "real payroll answer, not coaching template" }) },
+  // v2: payroll/tax is a People (or Accounting) department task now — no Generalist.
+  { n: 12, ask: "Help me figure out my quarterly payroll tax filings and remind me when to pay each one.", expectRoute: "people",
+    check: (b) => ({ pass: /941|940|quarterly|payroll|tax/i.test(b) && !/Goal\s*\/\s*Approach/i.test(b), detail: "real payroll/tax answer, not coaching template" }) },
 ];
 
 async function main() {
@@ -61,7 +61,7 @@ async function main() {
   if (!owner) throw new Error("seed owner missing — run npm run db:seed first");
 
   const lines: string[] = [];
-  lines.push("# Agent OS — Post-QA Round 2 Findings (LLM-on re-verification)");
+  lines.push("# Agent OS — Post-QA Round 2 Findings (LLM-on re-verification, v2 departments)");
   lines.push("");
   lines.push(`Generated ${new Date().toISOString()} against the seeded Sunset Auto Care demo with live Haiku routing + Sonnet drafts.`);
   lines.push("");
@@ -73,12 +73,15 @@ async function main() {
   let pass = 0;
   for (const s of scenarios) {
     const r = await handle(owner.id, s.ask);
-    const route = r.status === "direct_answer" ? "direct_answer" : r.status === "wishlist_fallback" ? "wishlist_fallback" : (r.agentId ?? r.status);
+    const route =
+      r.status === "direct_answer" ? "direct_answer"
+        : r.status === "wishlist_fallback" ? "wishlist_fallback"
+          : r.status === "declined" ? "declined"
+            : (r.agentId ?? r.status);
     const body = r.draft?.body ?? r.answer ?? r.orchestratorNotes.join(" ");
     const cost = (r.draft?.metadata as Record<string, unknown> | undefined)?.cost_usd ?? 0;
-    // Scenario 12: generalist (confident) and wishlist_fallback (low-conf) are
-    // both acceptable — either way no specialist matched and it's wishlisted.
-    const routeOk = route === s.expectRoute || (s.n === 12 && (route === "generalist" || route === "wishlist_fallback"));
+    // Payroll may land on People or Accounting depending on the classifier — both fine.
+    const routeOk = route === s.expectRoute || (s.n === 12 && (route === "people" || route === "accounting"));
     const chk = s.check(body, route);
     const ok = routeOk && chk.pass;
     if (ok) pass++;
