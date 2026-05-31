@@ -39,7 +39,8 @@ describe("agents are datasource-agnostic", () => {
   const files = agentEntryFiles();
 
   it("found the agent entry files", () => {
-    expect(files.length).toBeGreaterThanOrEqual(18);
+    // v2: 17 skill agents (the 18 v1 workers minus the eliminated Generalist).
+    expect(files.length).toBeGreaterThanOrEqual(17);
   });
 
   it("no agent imports the Prisma db client", () => {

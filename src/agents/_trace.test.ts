@@ -24,9 +24,10 @@ describe("trace emitter (rule 1)", () => {
   });
 });
 
-describe("registry", () => {
-  it("registers the generalist and exposes it for routing", () => {
-    expect(registry.has("generalist")).toBe(true);
-    expect(registry.routable().map((a) => a.agent_id)).toContain("generalist");
+describe("registry (v2)", () => {
+  it("has no generalist and exposes the 8 departments for routing", () => {
+    expect(registry.has("generalist")).toBe(false);
+    expect(registry.routable().map((a) => a.agent_id)).toContain("sales");
+    expect(registry.routable()).toHaveLength(8);
   });
 });
