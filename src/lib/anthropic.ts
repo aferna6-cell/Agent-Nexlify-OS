@@ -11,6 +11,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "./db.js";
+import { isCapExceeded } from "./usage.js";
 
 export type ModelPurpose = "routing" | "draft" | "other";
 
@@ -36,6 +37,14 @@ export class ModelUnavailableError extends Error {
   constructor(message = "Anthropic API key not configured") {
     super(message);
     this.name = "ModelUnavailableError";
+  }
+}
+
+/** Thrown when the daily usage cap for a purpose is hit (offline fallback then applies). */
+export class UsageCapExceededError extends Error {
+  constructor(public readonly purpose: "routing" | "draft", message = `Daily ${purpose} usage cap reached`) {
+    super(message);
+    this.name = "UsageCapExceededError";
   }
 }
 
@@ -79,6 +88,13 @@ export async function complete(args: CompleteArgs): Promise<CompleteResult> {
   if (!anthropic) {
     await logCall({ runId: args.runId, purpose: args.purpose, model, inputTokens: 0, outputTokens: 0, costUsd: 0, ok: false, error: "no_api_key" });
     throw new ModelUnavailableError();
+  }
+
+  // Hard daily cap (demo spend protection). When hit, refuse BEFORE calling
+  // Anthropic so the agent falls back to the offline composer honestly.
+  if ((args.purpose === "routing" || args.purpose === "draft") && (await isCapExceeded(args.purpose))) {
+    await logCall({ runId: args.runId, purpose: args.purpose, model, inputTokens: 0, outputTokens: 0, costUsd: 0, ok: false, error: "usage_cap_exceeded" });
+    throw new UsageCapExceededError(args.purpose);
   }
 
   try {
