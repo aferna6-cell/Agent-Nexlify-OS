@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineAgent } from "../_schema.js";
 import { Authoring, presentProfileFields } from "../_authoring.js";
 import { finishBody } from "../_format.js";
-import { db } from "../../lib/db.js";
+import { getOwnerActions } from "../../lib/providers/owner-actions.js";
 import type { AgentOutput } from "../../types/agent.js";
 import { examples } from "./examples.js";
 
@@ -34,16 +34,9 @@ export const aiVisibilityStub = defineAgent(
       data: presentProfileFields(context.businessProfile),
     });
 
-    // Tag the owner record for the future beta invite.
-    let tagged = false;
-    if (userId) {
-      try {
-        await db.user.update({ where: { id: userId }, data: { aiVisibilityInterest: true } });
-        tagged = true;
-      } catch {
-        // tagging is best-effort; never block the draft
-      }
-    }
+    // Tag the owner record for the future beta invite — through the write-side
+    // seam (OwnerActions), so this works unchanged on the production datasource.
+    const tagged = userId ? await getOwnerActions().tagAiVisibilityInterest(userId) : false;
     await emitTrace.work("capture_beta_interest", tagged ? "Tagged owner record: ai_visibility_interest = true" : "Noted interest in the AI Visibility v2 beta");
     a.note("I've noted your interest in AI Visibility — you'll be first in line when the full version ships.");
 

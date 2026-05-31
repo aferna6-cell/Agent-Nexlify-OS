@@ -139,6 +139,34 @@ export async function currentUserId(): Promise<string | null>; // convenience
 
 ---
 
+## 3b. Write-side abstraction (`OwnerActions`)
+
+**Seam:** `src/lib/providers/owner-actions.ts`
+
+```ts
+export interface OwnerActions {
+  tagAiVisibilityInterest(userId: string): Promise<boolean>; // best-effort
+}
+export function setOwnerActions(a: OwnerActions): void;
+export function getOwnerActions(): OwnerActions;
+```
+
+`SharedContext` is read-only, but a few agents need a small, well-defined
+**write** (e.g. AI Visibility tags the owner record for the beta invite). Those
+writes go through this seam — **no agent imports Prisma directly** (enforced by
+review: `grep -rl lib/db src/agents/*/agent.ts` must be empty). The interface is
+deliberately one-method-per-side-effect (never a generic `write`) so the
+production surface stays auditable.
+
+- **Standalone:** `PrismaOwnerActions` in `src/agents/_shared-context.ts`,
+  registered on import alongside the data-layer provider.
+- **Production:** implement `OwnerActions` against your store (set
+  `aiVisibilityInterest` on the business/owner record) and call
+  `setOwnerActions(...)` at startup. Best-effort contract: never throw; return
+  `false` if the write fails and the agent still drafts.
+
+---
+
 ## 4. Feature-flag plan (`feature_agent_os`)
 
 **Seam:** `src/lib/feature-flags.ts`
@@ -323,16 +351,28 @@ A second engineer can complete the merge by doing exactly this:
    `setAuthProvider(...)`. **One-line follow-up:** in
    `src/app/api/chat/route.ts`, pass `identity.businessProfileId` as the scope
    key to `handle()` for multi-tenant data scoping. (§3)
-4. **Back feature flags** with the production service via
+4. **Write `ProductionOwnerActions`** implementing `OwnerActions` (set
+   `aiVisibilityInterest` on the business/owner record) and register with
+   `setOwnerActions(...)`. (§3b)
+5. **Back feature flags** with the production service via
    `setFeatureFlagProvider(...)`; gate the Agent OS nav entry on
    `feature_agent_os`. (§4)
-5. **Wire triggers/tools** for Lead Triage (event) and Appointment Reminder
+6. **Wire triggers/tools** for Lead Triage (event) and Appointment Reminder
    (schedule + calendar/Twilio), each behind its sub-flag. (§6)
-6. **Wire real send** in `src/app/api/drafts/[id]/route.ts` (currently logs to
+7. **Wire real send** in `src/app/api/drafts/[id]/route.ts` (currently logs to
    console) behind `feature_agent_os_autosend`, respecting `never_auto_send`.
-7. **Run the rollout** per §4: internal allow-list → cohort ramp → 100% → retire.
+8. **Run the rollout** per §4: internal allow-list → cohort ramp → 100% → retire.
 
 **No changes required** to: `src/agents/_orchestrator.ts`, any
 `src/agents/*/agent.ts`, `src/types/agent.ts`, the classifier, or the trace
 engine. That invariant is the whole point of Phase 6 — if a merge step forces a
 change to one of those, treat it as a contract gap and update this document.
+
+**Contract guards (CI-enforced, so the merge can't silently break):**
+- `tests/no-direct-db-in-agents.test.ts` — fails if any `src/agents/*/agent.ts`
+  imports the Prisma client. Agents read via `SharedContext` and write via
+  `OwnerActions`; nothing else.
+- `tests/schema.sync.test.ts` — SQLite and Postgres schemas differ only by the
+  provider line.
+- `src/lib/providers/providers.test.ts` — proves every seam
+  (context / auth / owner-actions / flags) can be swapped at runtime.

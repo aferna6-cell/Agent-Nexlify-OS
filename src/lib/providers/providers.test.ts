@@ -24,6 +24,14 @@ import {
   type FeatureFlagProvider,
   type FeatureFlag,
 } from "../feature-flags.js";
+import {
+  setOwnerActions,
+  getOwnerActions,
+  hasOwnerActions,
+  type OwnerActions,
+} from "./owner-actions.js";
+import { aiVisibilityStub } from "../../agents/ai_visibility_stub/agent.js";
+import { fullContext, fakeEmitter } from "../../agents/_testkit.js";
 import type { SharedContext } from "../../types/agent.js";
 
 const emptyCtx: SharedContext = {
@@ -98,5 +106,52 @@ describe("FeatureFlagProvider", () => {
     setFeatureFlagProvider(prod);
     expect(await isFeatureEnabled("feature_agent_os", { businessProfileId: "biz-in-cohort" })).toBe(true);
     expect(await isFeatureEnabled("feature_agent_os", { businessProfileId: "other" })).toBe(false);
+  });
+});
+
+describe("OwnerActions seam", () => {
+  it("routes an agent's owner-tag write through a swapped provider (no direct db)", async () => {
+    const tagged: string[] = [];
+    const fake: OwnerActions = {
+      async tagAiVisibilityInterest(userId) {
+        tagged.push(userId);
+        return true;
+      },
+    };
+    setOwnerActions(fake);
+    expect(hasOwnerActions()).toBe(true);
+
+    // Run the AI Visibility agent WITH a userId — the write must go through the
+    // seam, proving the agent no longer touches Prisma directly.
+    const { emitter } = fakeEmitter();
+    const out = await aiVisibilityStub.run({
+      input: {},
+      context: fullContext(),
+      emitTrace: emitter,
+      ownerAsk: "how does ChatGPT see my business?",
+      runId: "",
+      userId: "owner-42",
+    });
+    expect(tagged).toEqual(["owner-42"]);
+    expect(out.draft?.metadata?.tagged).toBe(true);
+  });
+
+  it("a failing provider is best-effort (agent still drafts)", async () => {
+    setOwnerActions({
+      async tagAiVisibilityInterest() {
+        return false;
+      },
+    });
+    const { emitter } = fakeEmitter();
+    const out = await aiVisibilityStub.run({
+      input: {},
+      context: fullContext(),
+      emitTrace: emitter,
+      ownerAsk: "ai visibility please",
+      runId: "",
+      userId: "owner-7",
+    });
+    expect(out.draft).toBeTruthy();
+    expect(out.draft?.metadata?.tagged).toBe(false);
   });
 });

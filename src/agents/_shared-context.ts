@@ -19,6 +19,7 @@ import {
   getSharedContextProvider,
   type SharedContextProvider,
 } from "../lib/providers/shared-context.js";
+import { setOwnerActions, type OwnerActions } from "../lib/providers/owner-actions.js";
 import type {
   BusinessProfileData,
   KbEntry,
@@ -107,10 +108,25 @@ export class PrismaSharedContextProvider implements SharedContextProvider {
   }
 }
 
-// Register the standalone provider on import. The orchestrator imports this
-// module, so the seam is wired before any agent runs. The production merge can
-// override this by calling setSharedContextProvider() after its own startup.
+/** Standalone Prisma implementation of the write-side seam. */
+export class PrismaOwnerActions implements OwnerActions {
+  async tagAiVisibilityInterest(userId: string): Promise<boolean> {
+    try {
+      await db.user.update({ where: { id: userId }, data: { aiVisibilityInterest: true } });
+      return true;
+    } catch {
+      // best-effort by contract — never throw
+      return false;
+    }
+  }
+}
+
+// Register the standalone providers on import. The orchestrator imports this
+// module, so the seams are wired before any agent runs. The production merge can
+// override these by calling setSharedContextProvider()/setOwnerActions() after
+// its own startup.
 setSharedContextProvider(new PrismaSharedContextProvider());
+setOwnerActions(new PrismaOwnerActions());
 
 /**
  * Load the shared context for a user through the registered provider.
