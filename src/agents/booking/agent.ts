@@ -13,6 +13,7 @@ const Input = z.object({
   requested_day: z.string().optional(),
   service_type: z.string().optional(),
   vehicle: z.string().optional(),
+  scheduling_constraints: z.array(z.string()).optional(),
   mode: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -67,6 +68,7 @@ export const booking = defineAgent(
       : undefined;
     const subject = params.subject?.trim() || servicePhrase || "your appointment";
     const slot = params.offered_slot?.trim() || params.requested_day?.trim();
+    const constraints = (params.scheduling_constraints ?? []).map((c) => c.trim()).filter(Boolean);
     const mode = resolveMode(params.mode, ownerAsk);
 
     await emitTrace.emit("load_business_profile", {
@@ -108,10 +110,15 @@ export const booking = defineAgent(
         case "cancel":
           body = `Hi ${name}, I'm sorry but I need to cancel ${subject}. I'd love to find you a new time whenever you're ready — just reply and we'll sort it out.`;
           break;
-        default:
+        default: {
+          // Acknowledge an owner-stated constraint (e.g. "tomorrow is fully
+          // booked") before offering the slot — but only what the owner said.
+          const lead = constraints.length && slot ? `${constraints[0]!.replace(/^./, (c) => c.toUpperCase())}, but ` : "";
           body = slot
-            ? `Hi ${name}, I can offer you ${slot} for ${subject} — would that work for you? Reply yes and I'll hold it.`
+            ? `Hi ${name}, ${lead}I can offer you ${slot} for ${subject} — would that work for you? Reply yes and I'll hold it.`
             : `Hi ${name}, I'd love to get ${subject} on the calendar. What day and time generally work for you? Send a couple of options and I'll confirm one.`;
+          break;
+        }
       }
       return signoff ? `${body} — ${signoff}` : body;
     };
@@ -121,13 +128,14 @@ export const booking = defineAgent(
       `You draft ONE short SMS (max 280 characters) to a customer about an appointment, on the SMS channel: ` +
       `plain text only — no markdown, no asterisks, no headers. Use exactly ONE frame for this message: ` +
       `${mode === "confirm" ? "a clear confirmation (do NOT also ask 'would that work?')." : mode === "propose" ? "a proposal that asks if the slot works (do NOT say 'consider this confirmed')." : `a ${mode} message.`} ` +
-      `Never invent scheduling state (no 'fully booked', no made-up times). ` +
+      `Never INVENT scheduling state, but DO acknowledge any scheduling constraint the owner explicitly stated. ` +
+      (constraints.length ? `Owner-stated constraints (acknowledge naturally, don't contradict): ${constraints.join("; ")}. ` : `No constraints were stated — don't mention availability you don't know. `) +
       (slot ? `Slot: ${slot}.` : `No specific slot was given — ask the customer for their availability.`) +
       (signoff ? ` Sign off as ${signoff}.` : "");
     const prompt =
       `Customer: ${customerName ?? "(unknown)"} (greet by first name: ${name}). ` +
       `Subject: ${subject}.${serviceType ? ` Service: ${serviceType}.` : ""}${vehicle ? ` Vehicle: ${vehicle}.` : ""} ` +
-      `Mode: ${mode}. Owner request: "${ownerAsk}"`;
+      `${constraints.length ? `Constraints: ${constraints.join("; ")}. ` : ""}Mode: ${mode}. Owner request: "${ownerAsk}"`;
 
     await emitTrace.work("compose_message", `mode=${mode}, slot=${slot ?? "none provided"}`);
     const generated = await generateDraft({ system, prompt, runId, local, maxTokens: 200 });

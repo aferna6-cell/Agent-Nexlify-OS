@@ -97,6 +97,29 @@ function extractSlot(ask: string): string | undefined {
   return d ?? t;
 }
 
+/** Scheduling constraints the owner stated, e.g. "tomorrow is fully booked" (B-04). */
+function extractSchedulingConstraints(ask: string): string[] {
+  const out: string[] = [];
+  const patterns: RegExp[] = [
+    /\b(?:tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+is\s+(?:fully\s+)?booked\b/i,
+    /\bearliest\s+(?:we\s+can\s+do|is|available)[^.,;]*/i,
+    /\bno\s+(?:availability|openings?|slots?)[^.,;]*/i,
+    /\bcan'?t\s+do\s+(?:before|until)[^.,;]*/i,
+    /\bonly\s+(?:have|got)\s+[^.,;]*\s+(?:open|free|available)\b/i,
+    /\bfully\s+booked\b/i, // generic fallback, last so the more specific phrase wins
+  ];
+  for (const re of patterns) {
+    const m = ask.match(re);
+    if (!m) continue;
+    const phrase = m[0].trim();
+    // Skip if an already-captured constraint contains this one (avoid dupes like
+    // "tomorrow is fully booked" + "fully booked").
+    if (out.some((p) => p.toLowerCase().includes(phrase.toLowerCase()))) continue;
+    out.push(phrase);
+  }
+  return out;
+}
+
 export function extractParams(ask: string): Record<string, unknown> {
   const params: Record<string, unknown> = {};
   const name = extractName(ask);
@@ -105,12 +128,14 @@ export function extractParams(ask: string): Record<string, unknown> {
   const slot = extractSlot(ask);
   const serviceType = extractServiceType(ask);
   const vehicle = extractVehicle(ask);
+  const schedulingConstraints = extractSchedulingConstraints(ask);
   if (name) params.customer_name = name;
   if (amount !== undefined) params.amount = amount;
   if (platform) params.platform = platform;
   if (slot) params.offered_slot = slot;
   if (serviceType) params.service_type = serviceType;
   if (vehicle) params.vehicle = vehicle;
+  if (schedulingConstraints.length) params.scheduling_constraints = schedulingConstraints;
   params.request = ask;
   return params;
 }

@@ -42,6 +42,9 @@ export interface AgentRunHistoryItem {
   title: string;
   status: string;
   createdAt: string;
+  /** Customer Question runs where the KB lacked the answer (a holding reply was
+   * drafted). Surfaced by the Weekly Briefing as a "KB gap" to address. */
+  kbGap?: boolean;
 }
 
 export interface AppointmentData {

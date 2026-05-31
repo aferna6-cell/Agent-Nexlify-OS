@@ -97,12 +97,25 @@ export class PrismaSharedContextProvider implements SharedContextProvider {
         dueAt: iv.dueAt.toISOString(),
         status: iv.status,
       })),
-      agentRunHistory: runs.map((r) => ({
-        agentId: r.agentId,
-        title: r.draft?.title ?? r.ownerAsk,
-        status: r.status,
-        createdAt: r.createdAt.toISOString(),
-      })),
+      agentRunHistory: runs.map((r) => {
+        // Detect a KB gap: a Customer Question run whose draft metadata recorded
+        // kb_hit=false (the agent fell back to a safe holding reply).
+        let kbGap = false;
+        if (r.agentId === "customer_question" && r.draft?.metadata) {
+          try {
+            kbGap = (JSON.parse(r.draft.metadata) as { kb_hit?: boolean }).kb_hit === false;
+          } catch {
+            kbGap = false;
+          }
+        }
+        return {
+          agentId: r.agentId,
+          title: r.draft?.title ?? r.ownerAsk,
+          status: r.status,
+          createdAt: r.createdAt.toISOString(),
+          kbGap,
+        };
+      }),
       kb,
     };
   }

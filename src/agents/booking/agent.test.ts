@@ -43,4 +43,15 @@ describe("booking", () => {
     expect(output.draft!.body).not.toMatch(/\[Shop Name\]|\[Your Name\]/);
     expect(output.draft!.body).toContain("Maya"); // real signoff name
   });
+
+  it("acknowledges an owner-stated scheduling constraint (B-04)", async () => {
+    const { output } = await runFromAsk(
+      booking,
+      "Offer Mike a tire rotation Thursday at 10:30. Tomorrow is fully booked.",
+      fullContext(),
+    );
+    // The draft references the constraint the owner gave (not invented state).
+    expect(output.draft!.body).toMatch(/fully booked/i);
+    expect(output.draft!.body).toMatch(/Thursday at 10:30/);
+  });
 });

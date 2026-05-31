@@ -44,4 +44,18 @@ describe("extractParams — named entities", () => {
     expect(p.amount).toBe(2400);
     expect(p.offered_slot).toBe("Saturday at 9am");
   });
+
+  it("captures scheduling constraints, de-duplicated (B-04)", () => {
+    const c = extractParams("Offer Mike Thursday at 10:30. Tomorrow is fully booked.").scheduling_constraints as string[];
+    expect(c).toEqual(["Tomorrow is fully booked"]);
+  });
+
+  it("captures 'earliest is' constraints", () => {
+    const c = extractParams("Earliest we can do is Thursday — let Sam know.").scheduling_constraints as string[];
+    expect(c?.[0]).toMatch(/earliest/i);
+  });
+
+  it("no scheduling_constraints key when none stated", () => {
+    expect(extractParams("Book Sam for a detail.").scheduling_constraints).toBeUndefined();
+  });
 });
