@@ -6,7 +6,11 @@
  * amount, platform, slot, etc.). Agents tolerate missing params.
  */
 
-const NAME_TRIGGERS = ["for", "to", "with", "from", "text", "email", "call", "remind", "ask", "tell", "send", "contact"];
+const NAME_TRIGGERS = [
+  "for", "to", "with", "from", "text", "email", "call", "remind", "ask", "tell", "send", "contact",
+  // imperative booking/finance verbs that precede a customer name (B-08):
+  "confirm", "book", "schedule", "reschedule", "cancel", "follow", "chase", "invoice", "quote", "thank",
+];
 const STOPWORDS = new Set([
   "the", "a", "an", "my", "our", "your", "me", "us", "them", "everyone", "customer",
   "customers", "client", "lead", "leads", "tomorrow", "today", "please", "review", "him", "her", "their",
@@ -16,6 +20,10 @@ function extractName(ask: string): string | undefined {
   // Leading "Firstname [Lastname] <action-verb>" (e.g. "Mike Johnson called …").
   const lead = ask.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)\s+(?:called|wants?|wanted|needs?|asked|emailed|texted|reached out|stopped by)/);
   if (lead) return lead[1];
+
+  // Possessive: "<name>'s <thing>" (e.g. "Confirm Mike Johnson's tire rotation").
+  const poss = ask.match(/\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)'s\b/);
+  if (poss && !STOPWORDS.has(poss[1]!.toLowerCase())) return poss[1];
 
   const tokens = ask.split(/\s+/);
   for (let i = 0; i < tokens.length - 1; i++) {
@@ -47,6 +55,39 @@ function extractPlatform(ask: string): string | undefined {
   return undefined;
 }
 
+/** Common auto-shop services, matched verbatim from the ask (B-04). */
+function extractServiceType(ask: string): string | undefined {
+  const a = ask.toLowerCase();
+  const services: [RegExp, string][] = [
+    [/\btire rotation(?:s)?\b/, "tire rotation"],
+    [/\boil change\b/, "oil change"],
+    [/\bbrake(?:\s+(?:pad|job|service|inspection|repair))?\b/, "brake service"],
+    [/\b(?:ac|a\/c|air con(?:ditioning)?)\s*(?:recharge|service|repair|check)?\b/, "AC service"],
+    [/\balignment\b/, "alignment"],
+    [/\binspection\b/, "inspection"],
+    [/\bdetail(?:ing)?\b/, "detailing"],
+    [/\bbattery\b/, "battery service"],
+    [/\btune[\s-]?up\b/, "tune-up"],
+    [/\btransmission\b/, "transmission service"],
+  ];
+  for (const [re, label] of services) if (re.test(a)) return label;
+  return undefined;
+}
+
+/** Vehicle reference like "2019 F-150" / "2018 Prius" / "Honda Civic" (B-04). */
+function extractVehicle(ask: string): string | undefined {
+  // Year + ONE model token (optionally hyphenated, e.g. "F-150"). Bounded so it
+  // doesn't swallow trailing words like "for Thursday".
+  const yearModel = ask.match(/\b(?:19|20)\d{2}\s+([A-Z][A-Za-z]*(?:-?\d+[A-Za-z]*)?|[A-Z][a-z]+)\b/);
+  if (yearModel) return yearModel[0].trim();
+  // Known make + optional model token, e.g. "Honda Civic", "Ford F-150".
+  const make = ask.match(
+    /\b(Toyota|Honda|Ford|Chevy|Chevrolet|Nissan|BMW|Audi|Tesla|Subaru|Jeep|Dodge|Ram|GMC|Kia|Hyundai|Mazda|Volkswagen|VW|Lexus|Prius)\b(?:\s+([A-Z][A-Za-z]*(?:-?\d+[A-Za-z]*)?))?/i,
+  );
+  if (make) return make[0].trim();
+  return undefined;
+}
+
 function extractSlot(ask: string): string | undefined {
   const day = ask.match(/\b((?:mon|tues|wednes|thurs|fri|satur|sun)day|tomorrow)\b/i);
   const time = ask.match(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))\b/i);
@@ -62,10 +103,14 @@ export function extractParams(ask: string): Record<string, unknown> {
   const amount = extractMoney(ask);
   const platform = extractPlatform(ask);
   const slot = extractSlot(ask);
+  const serviceType = extractServiceType(ask);
+  const vehicle = extractVehicle(ask);
   if (name) params.customer_name = name;
   if (amount !== undefined) params.amount = amount;
   if (platform) params.platform = platform;
   if (slot) params.offered_slot = slot;
+  if (serviceType) params.service_type = serviceType;
+  if (vehicle) params.vehicle = vehicle;
   params.request = ask;
   return params;
 }

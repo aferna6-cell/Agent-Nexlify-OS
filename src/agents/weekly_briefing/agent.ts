@@ -20,6 +20,25 @@ interface Section {
 function buildSections(ctx: SharedContext): Section[] {
   const sections: Section[] = [];
 
+  // Owner attention needed — surfaced FIRST so the most actionable items lead
+  // (B-06). Complaints from the widget + stale leads + overdue invoices.
+  const attention: string[] = [];
+  const complaints = ctx.widgetHistory.filter((c) => (c.intent ?? "").toLowerCase().includes("complaint"));
+  for (const c of complaints) {
+    attention.push(`Complaint from ${c.contactName ?? "a customer"}: ${c.summary}`);
+  }
+  const staleLeads = ctx.pipelineLeads.filter((l) => l.status === "stale");
+  for (const l of staleLeads) {
+    attention.push(`Stale lead: ${l.name}${l.subject ? ` (${l.subject})` : ""} — worth a follow-up.`);
+  }
+  const overdueInv = ctx.invoices.filter((iv) => iv.status === "overdue");
+  for (const iv of overdueInv) {
+    attention.push(`Overdue invoice ${iv.number} for ${iv.customerName} — $${iv.amount.toLocaleString("en-US")}.`);
+  }
+  if (attention.length) {
+    sections.push({ heading: "Owner attention needed", content: attention.map((a) => `- ${a}`).join("\n") });
+  }
+
   if (ctx.widgetHistory.length > 0) {
     const topics = [...new Set(ctx.widgetHistory.flatMap((c) => c.topics))].slice(0, 5);
     sections.push({
@@ -57,6 +76,22 @@ function buildSections(ctx: SharedContext): Section[] {
   if (ctx.agentRunHistory.length > 0) {
     const approved = ctx.agentRunHistory.filter((r) => r.status === "approved" || r.status === "sent").length;
     sections.push({ heading: "Drafts & sends", content: `${ctx.agentRunHistory.length} agent run(s); ${approved} approved/sent.` });
+  }
+
+  // What's coming — upcoming appointments give a forward look (B-06 companion).
+  const upcoming = ctx.appointments
+    .filter((ap) => ap.status === "scheduled")
+    .sort((x, y) => x.scheduledFor.localeCompare(y.scheduledFor))
+    .slice(0, 3);
+  if (upcoming.length) {
+    const items = upcoming.map((ap) => {
+      const when = new Date(ap.scheduledFor);
+      const label = Number.isNaN(when.getTime())
+        ? ap.scheduledFor
+        : when.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      return `- ${ap.customerName}${ap.service ? ` — ${ap.service}` : ""} (${label})`;
+    });
+    sections.push({ heading: "What's coming", content: items.join("\n") });
   }
 
   return sections;

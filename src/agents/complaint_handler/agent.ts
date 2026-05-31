@@ -16,9 +16,14 @@ const Input = z.object({
 function deriveTopic(text: string): string {
   const t = text.toLowerCase();
   if (t.includes("scratch") || t.includes("damage") || t.includes("dent")) return "vehicle damage";
+  if (/\b(ac|a\/c|air con|air-con|cooling|coolant|recharge|compressor|freon|refrigerant)\b/.test(t)) return "AC service";
+  if (t.includes("brake")) return "brake service";
+  if (t.includes("oil") || t.includes("filter")) return "oil change";
+  if (t.includes("tire") || t.includes("rotation") || t.includes("alignment")) return "tire service";
+  if (t.includes("battery") || t.includes("electrical")) return "electrical";
   if (t.includes("late") || t.includes("wait")) return "lateness";
   if (t.includes("streak") || t.includes("rushed") || t.includes("quality")) return "service quality";
-  if (t.includes("refund") || t.includes("charge")) return "billing";
+  if (t.includes("refund") || t.includes("charge") || t.includes("overcharge") || t.includes("bill")) return "billing";
   return "service issue";
 }
 
@@ -66,10 +71,13 @@ export const complaintHandler = defineAgent(
     const signoff = a.signoff();
     const name = customerName ?? "";
     const greeting = name ? `Hi ${name},` : "Hi,";
+    const topic = deriveTopic(complaint);
 
     const local = (): string => {
+      // Reference the specific issue (topic) so the customer feels heard (B-15).
       let body =
-        `${greeting} I'm really sorry about this — that's not the experience we want you to have, and I take full responsibility for making it right. ` +
+        `${greeting} I'm really sorry about the trouble with your ${topic} — that's not the experience we want you to have, ` +
+        `and I take full responsibility for making it right. ` +
         `Here's what I'd like to do: let me look into exactly what happened and follow up with you directly so we can resolve it as quickly as possible.`;
       if (signoff) body += ` Thank you for telling me — ${signoff}.`;
       return body;
@@ -78,10 +86,11 @@ export const complaintHandler = defineAgent(
     const system =
       `${a.promptBlock()}\n\n` +
       `You draft a sensitive reply to a CUSTOMER COMPLAINT on the WIDGET channel: plain text only, no markdown. ` +
-      `Structure: (1) empathetic acknowledgment, (2) ownership of the issue, (3) ONE concrete next step. ` +
+      `Structure: (1) empathetic acknowledgment that NAMES the specific issue (${topic}), (2) ownership of the issue, ` +
+      `(3) ONE concrete next step. ` +
       `Never minimise the problem. Never make promises the business can't keep. Never be defensive.` +
       (signoff ? ` Sign off as ${signoff}.` : "");
-    const prompt = `Customer: ${customerName ?? "(unknown)"}. Complaint: "${complaint}"`;
+    const prompt = `Customer: ${customerName ?? "(unknown)"}. Issue area: ${topic}. Complaint: "${complaint}"`;
 
     await emitTrace.work("draft_empathetic_reply", "Wrote acknowledgment + ownership + one next step");
     const generated = await generateDraft({ system, prompt, runId, local, maxTokens: 300 });
@@ -92,10 +101,10 @@ export const complaintHandler = defineAgent(
 
     return {
       draft: {
-        title: `Complaint reply — ${customerName ?? "customer"}, ${deriveTopic(complaint)} (flagged red)`,
+        title: `Complaint reply — ${customerName ?? "customer"}, ${topic} (flagged red)`,
         body: finishBody("widget_reply", generated.text),
         channel: "widget_reply",
-        metadata: { flagged: "red", topic: deriveTopic(complaint), source: generated.source, cost_usd: generated.costUsd },
+        metadata: { flagged: "red", topic, source: generated.source, cost_usd: generated.costUsd },
         requiresApproval: true,
       },
       orchestratorNotes: a.notes,

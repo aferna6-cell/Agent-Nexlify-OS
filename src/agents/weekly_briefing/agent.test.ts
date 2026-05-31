@@ -30,7 +30,24 @@ describe("weekly_briefing", () => {
     const { output } = await runFromAsk(weeklyBriefing, "Run my weekly briefing.", busyContext());
     expect(output.draft!.body).toMatch(/## Conversations/);
     expect(output.draft!.body).toMatch(/## Leads/);
-    expect(output.draft!.metadata?.sections_included).toEqual(["Conversations", "Leads", "Drafts & sends"]);
+    const included = output.draft?.metadata?.sections_included as string[];
+    // Core data sections always present for busyContext; order-independent check.
+    expect(included).toEqual(expect.arrayContaining(["Conversations", "Leads", "Drafts & sends"]));
+    // A stale lead present → it must be surfaced under "Owner attention needed".
+    expect(included).toContain("Owner attention needed");
+    expect(output.draft!.body).toMatch(/Owner attention needed/);
+  });
+
+  it("surfaces a widget complaint under Owner attention needed (B-06)", async () => {
+    const ctx = fullContext({
+      widgetHistory: [
+        { id: "c1", contactName: "Robert L.", intent: "complaint", summary: "AC recharge didn't hold", topics: ["ac"], closedAt: "2026-05-28" },
+      ],
+    });
+    const { output } = await runFromAsk(weeklyBriefing, "Run my weekly briefing.", ctx);
+    expect(output.draft!.body).toMatch(/Owner attention needed/);
+    expect(output.draft!.body).toMatch(/Robert L\./);
+    expect(output.draft!.body).toMatch(/AC recharge/);
   });
 
   it("CRITICAL — omits empty sections; never says 'none this week'", async () => {

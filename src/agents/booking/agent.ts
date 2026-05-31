@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -12,6 +12,7 @@ const Input = z.object({
   offered_slot: z.string().optional(),
   requested_day: z.string().optional(),
   service_type: z.string().optional(),
+  vehicle: z.string().optional(),
   mode: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -55,7 +56,16 @@ export const booking = defineAgent(
     const p = Input.safeParse(input);
     const params = p.success ? p.data : {};
     const customerName = params.customer_name?.trim();
-    const subject = params.subject?.trim() || "your appointment";
+    const serviceType = params.service_type?.trim();
+    const vehicle = params.vehicle?.trim();
+    // Subject prefers the concrete service (+ vehicle) the owner gave us (B-04),
+    // e.g. "tire rotation on your 2019 F-150", falling back to a generic phrase.
+    const servicePhrase = serviceType
+      ? vehicle
+        ? `${serviceType} on your ${vehicle}`
+        : serviceType
+      : undefined;
+    const subject = params.subject?.trim() || servicePhrase || "your appointment";
     const slot = params.offered_slot?.trim() || params.requested_day?.trim();
     const mode = resolveMode(params.mode, ownerAsk);
 
@@ -64,8 +74,14 @@ export const booking = defineAgent(
       data: presentProfileFields(context.businessProfile),
     });
 
-    const signoff = a.signoff();
-    const name = customerName ?? "there";
+    // B-05: include the business name in the signoff when we have both names.
+    const ownerSign = a.signoff();
+    const businessName = a.field("businessName");
+    const signoff = ownerSign && businessName && ownerSign !== businessName
+      ? `${ownerSign}, ${businessName}`
+      : ownerSign ?? businessName;
+    // B-11: greet by first name only ("Hi Mike", not "Hi Mike Johnson").
+    const name = firstName(customerName) ?? "there";
 
     // QA fix: never invent scheduling state — if no slot was provided, ask for
     // availability instead of fabricating times or "fully booked".
@@ -108,7 +124,10 @@ export const booking = defineAgent(
       `Never invent scheduling state (no 'fully booked', no made-up times). ` +
       (slot ? `Slot: ${slot}.` : `No specific slot was given — ask the customer for their availability.`) +
       (signoff ? ` Sign off as ${signoff}.` : "");
-    const prompt = `Customer: ${customerName ?? "(unknown)"}. Subject: ${subject}. Mode: ${mode}. Owner request: "${ownerAsk}"`;
+    const prompt =
+      `Customer: ${customerName ?? "(unknown)"} (greet by first name: ${name}). ` +
+      `Subject: ${subject}.${serviceType ? ` Service: ${serviceType}.` : ""}${vehicle ? ` Vehicle: ${vehicle}.` : ""} ` +
+      `Mode: ${mode}. Owner request: "${ownerAsk}"`;
 
     await emitTrace.work("compose_message", `mode=${mode}, slot=${slot ?? "none provided"}`);
     const generated = await generateDraft({ system, prompt, runId, local, maxTokens: 200 });

@@ -35,6 +35,16 @@ export function resolveField(profile: BusinessProfileData, key: keyof BusinessPr
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
 }
 
+/**
+ * First name for a casual greeting (B-11): "Sarah Chen" → "Sarah". Leaves
+ * single-token names alone and trims punctuation. Returns undefined for empty.
+ */
+export function firstName(full: string | undefined): string | undefined {
+  if (!full) return undefined;
+  const first = full.trim().split(/\s+/)[0];
+  return first && first.length > 0 ? first.replace(/[^A-Za-z'-]/g, "") || undefined : undefined;
+}
+
 /** The names of the profile fields that actually have data (for the honest trace). */
 export function presentProfileFields(profile: BusinessProfileData): string[] {
   return PROFILE_FIELDS.map((f) => f.key).filter((k) => resolveField(profile, k) !== undefined);
