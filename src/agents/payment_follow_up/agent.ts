@@ -1,15 +1,17 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
 import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
-import { finishBody, money } from "../_format.js";
+import { finishBody, money, parseMoney } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
 import { examples } from "./examples.js";
 
+const Money = z.preprocess(parseMoney, z.number().optional());
+
 const Input = z.object({
   customer_name: z.string().optional(),
-  amount: z.coerce.number().optional(),
-  invoice_amount: z.coerce.number().optional(),
+  amount: Money,
+  invoice_amount: Money,
   invoice_date: z.string().optional(),
   days_overdue: z.coerce.number().optional(),
   prior_touches: z.coerce.number().optional(),

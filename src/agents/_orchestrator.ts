@@ -147,6 +147,12 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   }
 
   // --- Confident route -------------------------------------------------------
+  // A confident route to the Generalist still means no specialist matched — that
+  // is an unmet-need signal, so capture it to the wishlist (the classifier may
+  // be sure it's "general", but the backlog should still see the demand).
+  if (top.agentId === "generalist") {
+    await captureWishlist(userId, ask, candidates);
+  }
   return runAndLog(userId, ask, top.agentId, top.confidence, candidates, cls.classifier, cls.params, "routed", opts.onStep);
 }
 

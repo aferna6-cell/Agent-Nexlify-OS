@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { defineAgent, type AgentChannel } from "../_schema.js";
 import { Authoring, presentProfileFields } from "../_authoring.js";
-import { finishBody, money } from "../_format.js";
+import { finishBody, money, parseMoney } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
 import { examples } from "./examples.js";
+
+const MoneyRequired = z.preprocess(parseMoney, z.number());
 
 export interface LineItem {
   description: string;
@@ -21,7 +23,7 @@ export interface QuoteData {
 const Input = z.object({
   customer_name: z.string().optional(),
   service_items: z
-    .array(z.object({ description: z.string(), price: z.coerce.number(), quantity: z.coerce.number().optional() }))
+    .array(z.object({ description: z.string(), price: MoneyRequired, quantity: z.coerce.number().optional() }))
     .optional(),
   terms: z.string().optional(),
   validity_days: z.coerce.number().optional(),
