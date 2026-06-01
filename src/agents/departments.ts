@@ -23,6 +23,15 @@ import { invoiceReminder } from "./invoice_reminder/agent.js";
 import { paymentFollowUp } from "./payment_follow_up/agent.js";
 import { weeklyBriefing } from "./weekly_briefing/agent.js";
 
+// v2 department-head skills (new).
+import { financialSummary } from "./financial_summary/agent.js";
+import { pricingMemo } from "./pricing_memo/agent.js";
+import { taxPrep } from "./tax_prep/agent.js";
+import { jobPost } from "./job_post/agent.js";
+import { trainingDoc } from "./training_doc/agent.js";
+import { hrMemo } from "./hr_memo/agent.js";
+import { documentDrafter } from "./document_drafter/agent.js";
+
 export const sales = defineDepartment({
   agent_id: "sales",
   display_name: "Sales",
@@ -156,11 +165,13 @@ export const accounting = defineDepartment({
   ],
   strong_signals: ["revenue", "financial", "pricing", "taxes"],
   skills: [
-    // Reuses the Weekly Briefing composer as the finance-summary skill until the
-    // dedicated financial_summary/pricing/tax skills are authored (v2 §2.6).
-    { agent: weeklyBriefing, extraKeywords: ["revenue", "financial", "summary", "cash", "expenses", "pricing", "tax", "taxes", "quarterly"] },
+    { agent: financialSummary, extraKeywords: ["revenue", "financial", "summary", "receivables", "cash", "income"] },
+    { agent: pricingMemo, extraKeywords: ["pricing", "price", "raise", "increase", "charge more"] },
+    { agent: taxPrep, extraKeywords: ["tax", "taxes", "quarterly", "941", "irs", "deductions"] },
+    // Weekly Briefing remains as a general fallback for broad "how's business" asks.
+    { agent: weeklyBriefing },
   ],
-  defaultSkillId: "weekly_briefing",
+  defaultSkillId: "financial_summary",
   examples: [
     { owner_ask: "What was our revenue last week?", expected_route: "accounting", expected_output_excerpt: "Briefing" },
     { owner_ask: "Give me a financial summary for the month.", expected_route: "accounting", expected_output_excerpt: "Briefing" },
@@ -180,11 +191,11 @@ export const adminRecords = defineDepartment({
   ],
   strong_signals: ["contract", "intake form", "document", "agreement"],
   skills: [
-    // Reuses the Content Writer composer for document drafting until the dedicated
-    // document/record_update/crm_cleanup skills are authored (v2 §2.7).
-    { agent: contentWriter, extraKeywords: ["contract", "agreement", "intake form", "template", "policy", "one-pager", "sop", "memo", "document"] },
+    { agent: documentDrafter, extraKeywords: ["contract", "agreement", "intake form", "template", "one-pager", "policy", "sop", "document"] },
+    // Content Writer remains as a general fallback for broader copy requests.
+    { agent: contentWriter, extraKeywords: ["about us", "blog", "article", "paragraph"] },
   ],
-  defaultSkillId: "content_writer",
+  defaultSkillId: "document_drafter",
   examples: [
     { owner_ask: "Draft a service agreement template for new customers.", expected_route: "admin_records", expected_output_excerpt: "agreement" },
     { owner_ask: "Write up a one-pager on our refund policy.", expected_route: "admin_records", expected_output_excerpt: "refund" },
@@ -204,11 +215,13 @@ export const people = defineDepartment({
   ],
   strong_signals: ["hire", "job post", "training", "employee", "payroll", "schedule the team"],
   skills: [
-    // Reuses the Content Writer composer for HR/job documents until the dedicated
-    // job_post/hiring/training/schedule/hr_memo skills are authored (v2 §2.8).
-    { agent: contentWriter, extraKeywords: ["hire", "hiring", "job post", "craigslist", "interview", "training", "employee", "payroll", "handbook", "write-up", "schedule"] },
+    { agent: jobPost, extraKeywords: ["job post", "craigslist", "hiring ad", "hire", "posting"] },
+    { agent: trainingDoc, extraKeywords: ["training", "checklist", "sop", "handbook", "onboarding"] },
+    { agent: hrMemo, extraKeywords: ["write up", "write-up", "coaching", "performance", "late", "schedule the team", "mother's day"] },
+    // Content Writer remains as a general fallback for broader copy requests.
+    { agent: contentWriter, extraKeywords: ["about us", "blog", "article", "paragraph"] },
   ],
-  defaultSkillId: "content_writer",
+  defaultSkillId: "job_post",
   examples: [
     { owner_ask: "Write a Craigslist post for a part-time mechanic, weekends, must have tools.", expected_route: "people", expected_output_excerpt: "mechanic" },
     { owner_ask: "Draft a training checklist for a new front-desk hire.", expected_route: "people", expected_output_excerpt: "training" },
