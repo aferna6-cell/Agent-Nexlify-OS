@@ -147,6 +147,12 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   }
 
   // --- Confident route -------------------------------------------------------
+  // A confident route to the Generalist still means no specialist matched — that
+  // is an unmet-need signal, so capture it to the wishlist (the classifier may
+  // be sure it's "general", but the backlog should still see the demand).
+  if (top.agentId === "generalist") {
+    await captureWishlist(userId, ask, candidates);
+  }
   return runAndLog(userId, ask, top.agentId, top.confidence, candidates, cls.classifier, cls.params, "routed", opts.onStep);
 }
 
@@ -229,6 +235,16 @@ async function runAndLog(
         ? "wishlist_fallback"
         : "routed";
 
+  // Honest offline-mode surfacing (Phase A task 6): when a draft was produced by
+  // the local composer (no key, cap hit, or model error) say so — never present
+  // a template-composed draft as if it were AI-generated.
+  const notes = [...output.orchestratorNotes];
+  if (output.draft && (output.draft.metadata as Record<string, unknown> | undefined)?.source === "local") {
+    notes.unshift(
+      "Heads up — I'm running in offline mode right now, so this draft came from the built-in composer rather than live AI. It's a safe starting point, but real AI generation is currently unavailable.",
+    );
+  }
+
   return {
     status,
     classifier,
@@ -240,7 +256,7 @@ async function runAndLog(
     params,
     draftId,
     draft: output.draft,
-    orchestratorNotes: output.orchestratorNotes,
+    orchestratorNotes: notes,
     noDraftReason: output.noDraftReason,
   };
 }

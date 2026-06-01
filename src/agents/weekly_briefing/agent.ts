@@ -35,6 +35,18 @@ function buildSections(ctx: SharedContext): Section[] {
   for (const iv of overdueInv) {
     attention.push(`Overdue invoice ${iv.number} for ${iv.customerName} — $${iv.amount.toLocaleString("en-US")}.`);
   }
+  // KB gaps: Customer Question runs that fell back to a holding reply because the
+  // knowledge base didn't cover the question (B-06). Suggest adding a FAQ entry.
+  const kbGaps = ctx.agentRunHistory.filter((r) => r.kbGap);
+  if (kbGaps.length) {
+    const noun = kbGaps.length === 1 ? "customer question" : "customer questions";
+    attention.push(`${kbGaps.length} ${noun} your knowledge base didn't cover — consider adding an FAQ entry so the AI can answer directly next time.`);
+  }
+  // No-shows in recent appointments with no follow-up logged.
+  const noShows = ctx.appointments.filter((ap) => ap.status === "no_show");
+  for (const ap of noShows) {
+    attention.push(`No-show: ${ap.customerName}${ap.service ? ` (${ap.service})` : ""} — worth a follow-up.`);
+  }
   if (attention.length) {
     sections.push({ heading: "Owner attention needed", content: attention.map((a) => `- ${a}`).join("\n") });
   }

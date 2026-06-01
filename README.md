@@ -84,8 +84,9 @@ approve, the direct widget answer, and the graceful wishlist fallback). Point
 | `NEXTAUTH_URL` / `AUTH_URL` | prod | The deployed origin. |
 | `EMAIL_SERVER` | prod | SMTP URL for real magic-link email. Unset → link prints to the server console (demo). |
 | `EMAIL_FROM` | prod | From-address for magic links. |
-| `ANTHROPIC_API_KEY` | optional | Enables real Haiku routing + Sonnet drafts. Unset → deterministic local composer ($0). |
+| `ANTHROPIC_API_KEY` | optional | Enables real Haiku routing + Sonnet drafts. Unset → deterministic local composer ($0), and the dashboard shows an explicit "offline mode" banner. **Use a key dedicated to this demo, separate from any production key.** |
 | `ANTHROPIC_MODEL_ROUTING` / `ANTHROPIC_MODEL_DRAFT` | optional | Model overrides (default Haiku 4.5 / Sonnet 4.6). |
+| `USAGE_CAP_ROUTING` / `USAGE_CAP_DRAFT` | optional | Hard per-day caps on real model calls (default 500 routing / 200 draft). At the cap, drafts fall back to the offline composer and the owner is told. A credit-low banner escalates yellow at 80%, red at 95%. |
 | `AUTH_DEMO_BYPASS` | demo only | `true` lets the API resolve the seeded owner without a browser session. Set `false`/unset in prod. |
 | `DEMO_OWNER_EMAIL` | demo only | The seeded owner (default `maya@sunsetauto.com`). |
 

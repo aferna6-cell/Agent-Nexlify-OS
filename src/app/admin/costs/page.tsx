@@ -5,6 +5,8 @@
 
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { capStatus } from "@/lib/usage";
+import { isModelAvailable } from "@/lib/anthropic";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,9 @@ export default async function CostsPage() {
   const perRunValues = agentRows.map((r) => r.perRun).sort((a, b) => a - b);
   const medianPerRun = perRunValues[Math.floor(perRunValues.length / 2)] ?? 0;
 
+  const caps = await capStatus();
+  const modelOn = isModelAvailable();
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
@@ -58,6 +63,16 @@ export default async function CostsPage() {
         <Stat label="Calls" value={String(calls.length)} />
         <Stat label="Tokens (in/out)" value={`${totalIn}/${totalOut}`} />
         <Stat label="Failures" value={String(failures)} />
+      </div>
+
+      <h2 className="mt-8 text-sm font-semibold">Daily usage caps</h2>
+      <p className="text-xs text-muted-foreground">
+        Hard per-day limits protect the demo key. At the cap, drafts fall back to the offline composer.
+        {modelOn ? "" : " (Live AI is not currently configured — running offline.)"}
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-3">
+        <CapCard label="Routing (Haiku)" used={caps.routing.used} cap={caps.routing.cap} ratio={caps.routing.ratio} />
+        <CapCard label="Drafts (Sonnet)" used={caps.draft.used} cap={caps.draft.cap} ratio={caps.draft.ratio} />
       </div>
 
       <h2 className="mt-8 text-sm font-semibold">By agent (cost per run)</h2>
@@ -156,6 +171,23 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-border bg-card px-3 py-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function CapCard({ label, used, cap, ratio }: { label: string; used: number; cap: number; ratio: number }) {
+  const pct = Math.min(100, Math.round(ratio * 100));
+  const bar = ratio >= 0.95 ? "bg-red-500" : ratio >= 0.8 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-3">
+      <div className="flex items-baseline justify-between">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-sm font-semibold">{used} / {cap}</div>
+      </div>
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className={`h-full ${bar}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{pct}% of today&rsquo;s cap</div>
     </div>
   );
 }

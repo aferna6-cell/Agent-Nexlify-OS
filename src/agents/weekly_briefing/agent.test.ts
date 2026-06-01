@@ -50,6 +50,17 @@ describe("weekly_briefing", () => {
     expect(output.draft!.body).toMatch(/AC recharge/);
   });
 
+  it("surfaces a KB gap from a Customer Question run (B-06)", async () => {
+    const ctx = fullContext({
+      agentRunHistory: [
+        { agentId: "customer_question", title: "Reply about hybrids", status: "completed", createdAt: "2026-05-29", kbGap: true },
+      ],
+    });
+    const { output } = await runFromAsk(weeklyBriefing, "Run my weekly briefing.", ctx);
+    expect(output.draft!.body).toMatch(/Owner attention needed/);
+    expect(output.draft!.body).toMatch(/knowledge base didn't cover|FAQ/i);
+  });
+
   it("CRITICAL — omits empty sections; never says 'none this week'", async () => {
     const { output } = await runFromAsk(weeklyBriefing, "Run my weekly briefing.", fullContext());
     const body = output.draft!.body;

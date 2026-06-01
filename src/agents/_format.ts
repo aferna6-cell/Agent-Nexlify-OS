@@ -57,3 +57,21 @@ export function money(amount: number): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/**
+ * Parse a money-ish value into a number. The LLM classifier often returns amounts
+ * as formatted strings ("$1,100", "1,100.00", "$2.4k") rather than bare numbers,
+ * which `Number(...)`/`z.coerce.number()` turn into NaN → 0. This strips currency
+ * symbols, thousands separators, and a trailing k/m multiplier. Returns undefined
+ * for unparseable input.
+ */
+export function parseMoney(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim().toLowerCase();
+  const mult = raw.endsWith("k") ? 1_000 : raw.endsWith("m") ? 1_000_000 : 1;
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  if (!cleaned) return undefined;
+  const n = Number(cleaned) * mult;
+  return Number.isFinite(n) ? n : undefined;
+}

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { demoBypass, DEMO_OWNER_EMAIL } from "@/lib/demo";
 import { SignOutButton } from "@/components/dashboard/sign-out-button";
+import { UsageBanner } from "@/components/dashboard/usage-banner";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -26,7 +27,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <SignOutButton />
         </div>
       </aside>
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <main className="flex flex-1 flex-col overflow-hidden">
+        <UsageBanner />
+        <div className="flex-1 overflow-hidden">{children}</div>
+      </main>
     </div>
   );
 }

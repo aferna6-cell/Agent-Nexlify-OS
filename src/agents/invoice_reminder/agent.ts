@@ -1,15 +1,17 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
 import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
-import { finishBody, money } from "../_format.js";
+import { finishBody, money, parseMoney } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
 import { examples } from "./examples.js";
 
+const Money = z.preprocess(parseMoney, z.number().optional());
+
 const Input = z.object({
   customer_name: z.string().optional(),
-  amount: z.coerce.number().optional(),
-  invoice_amount: z.coerce.number().optional(),
+  amount: Money,
+  invoice_amount: Money,
   invoice_number: z.string().optional(),
   invoice_date: z.string().optional(),
   days_overdue: z.coerce.number().optional(),
@@ -65,13 +67,15 @@ export const invoiceReminder = defineAgent(
     const name = firstName(customerName) ?? "there";
     const invoiceRef = invoiceNumber ? `invoice ${invoiceNumber}` : "your invoice";
     const dateClause = invoiceDate ? ` from ${invoiceDate}` : "";
+    const daysOverdue = params.days_overdue;
+    const overdueClause = typeof daysOverdue === "number" && daysOverdue > 0 ? ` (now ${daysOverdue} days past due)` : "";
 
     if (!methods) {
       a.note("I don't have a payment link or accepted methods on file, so I kept the ask open-ended. Add a payment link to your profile and I'll include it next time.");
     }
 
     const local = (): string => {
-      let body = `Hi ${name}, hope you're doing well! Just a friendly reminder about ${invoiceRef}${dateClause} (${money(amount)}). If it's already on its way, please ignore this`;
+      let body = `Hi ${name}, hope you're doing well! Just a friendly reminder about ${invoiceRef}${dateClause} (${money(amount)})${overdueClause}. If it's already on its way, please ignore this`;
       body += methods ? ` — otherwise you can pay via ${methods}. ` : " — otherwise just let me know if you have any questions. ";
       body += "Thanks so much!";
       if (signoff) body += ` — ${signoff}${businessName && signoff !== businessName ? `, ${businessName}` : ""}`;
@@ -81,7 +85,8 @@ export const invoiceReminder = defineAgent(
     const system =
       `${a.promptBlock()}\n\n` +
       `You draft a polite FIRST-TOUCH invoice reminder on the EMAIL channel (markdown allowed, but keep it brief). ` +
-      `Assume the customer simply forgot — warm, not accusatory; no threats. Mention the invoice ${invoiceNumber ?? ""} and amount ${money(amount)}. ` +
+      `Assume the customer simply forgot — warm, not accusatory; no threats. Mention the invoice ${invoiceNumber ?? ""} and amount ${money(amount)}${overdueClause ? `, which is ${daysOverdue} days past due` : ""}. ` +
+      `Do NOT add any meta notes, bracketed placeholders, or "[unknown]" text — use only the real values given. ` +
       (methods ? `Offer payment via: ${methods}.` : `You have no payment link — keep the payment ask open-ended; do not invent a link.`) +
       (signoff ? ` Sign off as ${signoff}.` : "");
     const prompt = `Customer: ${customerName ?? "(unknown)"}. Invoice: ${invoiceNumber ?? "(n/a)"} ${money(amount)}. Days overdue: ${params.days_overdue ?? "(n/a)"}.`;
