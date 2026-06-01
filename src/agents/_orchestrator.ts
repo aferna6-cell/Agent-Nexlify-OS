@@ -22,7 +22,7 @@ import type { AgentOutput, StreamedTraceStep } from "../types/agent.js";
 const CONFIDENCE_FLOOR = 0.5;
 const RESOLUTION_GAP = 0.1;
 
-export type DecisionStatus = "routed" | "needs_clarification" | "wishlist_fallback" | "owner_override" | "direct_answer";
+export type DecisionStatus = "routed" | "needs_clarification" | "wishlist_fallback" | "owner_override" | "direct_answer" | "declined";
 
 export interface HandleResult {
   status: DecisionStatus;
@@ -63,6 +63,37 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
     return { status: "direct_answer", classifier: "heuristic", decisionId: decision.id, confidence: 1, alternates: [], params: {}, orchestratorNotes: [], answer };
   }
 
+  // --- Direct answer: a cross-department "weekly briefing" the orchestrator
+  // aggregates from all 8 departments (v2 Decision 1). A department-specific
+  // briefing ("the Sales briefing") falls through to normal routing.
+  if (!opts.forceAgentId && isAggregateBriefingQuery(ask)) {
+    const ctx = await loadSharedContext(userId);
+    const answer = aggregateBriefing(ctx);
+    const decision = await db.routingDecision.create({
+      data: { userId, ask, classifier: "heuristic", decision: "direct_answer", chosenAgent: "orchestrator", confidence: 1 },
+    });
+    return { status: "direct_answer", classifier: "heuristic", decisionId: decision.id, confidence: 1, alternates: [], params: {}, orchestratorNotes: [], answer };
+  }
+
+  // --- Non-business asks → polite decline (v2 Decision 2: no Generalist) -------
+  if (!opts.forceAgentId && isNonBusiness(ask)) {
+    await captureWishlist(userId, ask, []);
+    const decision = await db.routingDecision.create({
+      data: { userId, ask, classifier: "heuristic", decision: "declined", chosenAgent: "none", confidence: 0 },
+    });
+    return {
+      status: "declined",
+      classifier: "heuristic",
+      decisionId: decision.id,
+      confidence: 0,
+      alternates: [],
+      params: {},
+      orchestratorNotes: [
+        "That looks like a personal task rather than a business one. Agent OS is built for your business work; for personal writing I'd recommend ChatGPT or Claude directly.",
+      ],
+    };
+  }
+
   const cls = await classify(ask);
   const candidates = cls.candidates;
   const alternates = candidates.slice(1, 4);
@@ -78,38 +109,51 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
     return runAndLog(userId, ask, opts.forceAgentId, chosen, candidates, cls.classifier, cls.params, "owner_override", opts.onStep);
   }
 
-  // --- Complaint detection short-circuits Customer Question (§11 rule 6) ------
+  // --- Complaint detection short-circuits to Customer Service (§11 rule 6) ----
   // Runs regardless of which classifier was used, so an angry message always
-  // reaches the (hardcoded never-auto-send) Complaint Handler.
+  // reaches Customer Service, which dispatches to its (hardcoded never-auto-send)
+  // complaint skill.
   if (detectComplaint(ask)) {
-    const conf = candidates.find((c) => c.agentId === "complaint_handler")?.confidence ?? 0.9;
-    const res = await runAndLog(userId, ask, "complaint_handler", conf, candidates, cls.classifier, cls.params, "routed", opts.onStep);
-    res.orchestratorNotes = ["Detected complaint language, so I routed this straight to the Complaint Handler.", ...res.orchestratorNotes];
+    const conf = candidates.find((c) => c.agentId === "customer_service")?.confidence ?? 0.9;
+    const res = await runAndLog(userId, ask, "customer_service", conf, candidates, cls.classifier, cls.params, "routed", opts.onStep);
+    res.orchestratorNotes = ["Detected complaint language, so I routed this straight to Customer Service.", ...res.orchestratorNotes];
     return res;
   }
 
   const top = candidates[0];
   const second = candidates[1];
 
-  // --- Low confidence → wishlist fallback to the Generalist ------------------
+  // --- Low confidence → wishlist + nearest department (v2: no Generalist) -----
+  // The 8 departments cover the genuine-business surface, so there's no catch-all
+  // worker. We capture the unmet-need signal and run the NEAREST department,
+  // telling the owner it was the closest match (and to pick another if wrong).
   if (!top || top.confidence < CONFIDENCE_FLOOR) {
     await captureWishlist(userId, ask, candidates);
-    // Pass the closest specialist to the Generalist so it can offer it (>0.4).
-    const fallbackParams = { ...cls.params };
-    if (top && top.confidence > 0.4) {
-      fallbackParams.nearest_specialist = registry.get(top.agentId).display_name;
-      fallbackParams.nearest_confidence = top.confidence;
+    if (!top) {
+      // Nothing scored at all — decline gracefully rather than guess.
+      const decision = await db.routingDecision.create({
+        data: { userId, ask, classifier: cls.classifier, decision: "wishlist_fallback", chosenAgent: "none", confidence: 0 },
+      });
+      return {
+        status: "wishlist_fallback",
+        classifier: cls.classifier,
+        decisionId: decision.id,
+        confidence: 0,
+        alternates: [],
+        params: cls.params,
+        orchestratorNotes: [
+          "I couldn't confidently match that to one of your departments, so I saved it to your wishlist. Could you rephrase it, or tell me which department should handle it?",
+        ],
+      };
     }
-    const res = await runAndLog(userId, ask, "generalist", top?.confidence ?? 0, candidates, cls.classifier, fallbackParams, "wishlist_fallback", opts.onStep);
-    // B-10: only offer alternates that are real specialists — never list
-    // "Generalist" as a considered alternative when we already routed there.
-    const specialistAlts = alternates.filter((a) => a.agentId !== "generalist");
-    const closest = specialistAlts.length
-      ? ` The closest specialists I considered were ${specialistAlts.map((a) => registry.get(a.agentId).display_name).join(" and ")}.`
+    const res = await runAndLog(userId, ask, top.agentId, top.confidence, candidates, cls.classifier, cls.params, "wishlist_fallback", opts.onStep);
+    const nearest = registry.get(top.agentId).display_name;
+    const otherAlts = alternates.filter((c) => c.agentId !== top.agentId);
+    const others = otherAlts.length
+      ? ` Other options I considered: ${otherAlts.map((a) => registry.get(a.agentId).display_name).join(" and ")}.`
       : "";
-    const tryPrompt = specialistAlts.length ? " Want me to try one of those instead?" : "";
     res.orchestratorNotes = [
-      `I don't have a confident match for this, so I saved it to your wishlist and took a general pass.${closest}${tryPrompt}`,
+      `I wasn't fully sure which department fits, so I saved it to your wishlist and ran the closest match, ${nearest}.${others} Pick another above if that's not right.`,
       ...res.orchestratorNotes,
     ];
     return res;
@@ -261,6 +305,31 @@ async function runAndLog(
   };
 }
 
+/**
+ * A cross-department "weekly briefing" the orchestrator aggregates itself (v2
+ * Decision 1). A department-named briefing ("the Sales briefing", "marketing
+ * recap") is NOT intercepted — it routes to that department's briefing skill.
+ */
+export function isAggregateBriefingQuery(ask: string): boolean {
+  const a = ask.toLowerCase();
+  const wantsBriefing = /\b(weekly briefing|my briefing|briefing|recap|summary of (the )?(week|business)|how'?s business|what happened (this|last) week)\b/.test(a);
+  if (!wantsBriefing) return false;
+  // If a specific department is named, let it route there instead.
+  const dept = /\b(sales|marketing|customer service|operations|invoicing|collections|accounting|finance|admin|records|people|hr|hiring)\b/.test(a);
+  return !dept;
+}
+
+const NON_BUSINESS_RE =
+  /\b(my (mom|mother|dad|father|wife|husband|kid|kids|son|daughter|friend|girlfriend|boyfriend|partner)|thank-?you note|birthday (card|message|poem)|wedding (toast|speech|vows)|love letter|personal (essay|statement)|my homework|dinner recipe|grocery list|vacation itinerary|dating profile)\b/i;
+
+/**
+ * Heuristic for clearly personal / non-business asks (v2 Decision 2). When true,
+ * the orchestrator politely declines instead of routing to a department.
+ */
+export function isNonBusiness(ask: string): boolean {
+  return NON_BUSINESS_RE.test(ask);
+}
+
 /** Detects questions about widget activity that the orchestrator answers directly. */
 export function isWidgetQuery(ask: string): boolean {
   const a = ask.toLowerCase();
@@ -285,6 +354,58 @@ function summarizeWidget(ctx: import("../types/agent.js").SharedContext): string
     .slice(0, 6)
     .map((c) => `• ${c.contactName ?? "Someone"}${c.intent ? ` (${c.intent.replace(/_/g, " ")})` : ""}: ${c.summary}`);
   return `Here's what came in through the widget — ${convos.length} conversation(s) [${breakdown}]:\n${lines.join("\n")}`;
+}
+
+/**
+ * Cross-department weekly briefing (v2 Decision 1): the orchestrator aggregates
+ * highlights across all departments from the shared data layer. Leads with an
+ * "Owner attention needed" block (complaints, overdue invoices, stale leads, KB
+ * gaps, no-shows), then a per-department snapshot, then "What's coming".
+ */
+export function aggregateBriefing(ctx: import("../types/agent.js").SharedContext): string {
+  const out: string[] = ["Weekly briefing — across all departments:"];
+
+  const attention: string[] = [];
+  for (const c of ctx.widgetHistory.filter((w) => (w.intent ?? "").toLowerCase().includes("complaint"))) {
+    attention.push(`Complaint from ${c.contactName ?? "a customer"}: ${c.summary} (Customer Service)`);
+  }
+  for (const iv of ctx.invoices.filter((i) => i.status === "overdue")) {
+    attention.push(`Overdue invoice ${iv.number} for ${iv.customerName} — $${iv.amount.toLocaleString("en-US")} (Invoicing & Collections)`);
+  }
+  for (const l of ctx.pipelineLeads.filter((p) => p.status === "stale")) {
+    attention.push(`Stale lead ${l.name}${l.subject ? ` (${l.subject})` : ""} (Sales)`);
+  }
+  for (const r of ctx.agentRunHistory.filter((h) => h.kbGap)) {
+    attention.push(`Knowledge-base gap from a customer question — add an FAQ entry (Customer Service): ${r.title}`);
+  }
+  for (const ap of ctx.appointments.filter((a) => a.status === "no_show")) {
+    attention.push(`No-show: ${ap.customerName}${ap.service ? ` (${ap.service})` : ""} (Operations)`);
+  }
+  if (attention.length) out.push("\nOwner attention needed:\n" + attention.map((a) => `• ${a}`).join("\n"));
+
+  const dept: string[] = [];
+  if (ctx.widgetHistory.length) dept.push(`Customer Service: ${ctx.widgetHistory.length} widget conversation(s).`);
+  if (ctx.pipelineLeads.length) dept.push(`Sales: ${ctx.pipelineLeads.length} lead(s) in the pipeline.`);
+  const openInv = ctx.invoices.filter((i) => i.status === "overdue" || i.status === "unpaid");
+  if (openInv.length) dept.push(`Invoicing: ${openInv.length} outstanding invoice(s) totaling $${openInv.reduce((s, i) => s + i.amount, 0).toLocaleString("en-US")}.`);
+  const completed = ctx.appointments.filter((a) => a.status === "completed").length;
+  if (completed) dept.push(`Operations: ${completed} completed appointment(s).`);
+  if (dept.length) out.push("\nBy department:\n" + dept.map((d) => `• ${d}`).join("\n"));
+
+  const upcoming = ctx.appointments
+    .filter((a) => a.status === "scheduled")
+    .sort((x, y) => x.scheduledFor.localeCompare(y.scheduledFor))
+    .slice(0, 3);
+  if (upcoming.length) {
+    out.push("\nWhat's coming:\n" + upcoming.map((a) => {
+      const w = new Date(a.scheduledFor);
+      const label = Number.isNaN(w.getTime()) ? a.scheduledFor : w.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      return `• ${a.customerName}${a.service ? ` — ${a.service}` : ""} (${label})`;
+    }).join("\n"));
+  }
+
+  if (out.length === 1) return "Quiet week — no logged activity across your departments yet. Nothing needs your attention right now.";
+  return out.join("\n");
 }
 
 /** Complaint-language detection (short-circuits routing to the Complaint Handler). */

@@ -6,10 +6,13 @@ it routes the ask to the best-fit **worker agent**, which runs, streams an hones
 reasoning trace, and produces a draft for approval. The eventual goal is to merge
 it into the main codebase once it's production-ready.
 
-> Source specs live in [`docs/`](docs/): the Worker Agent Library v1 and the
-> Product Plan. The build follows the phased plan. **All 18 agents are live**
-> and the app is demo-ready — see [`DEMO.md`](DEMO.md) for the 10-minute walkthrough.
-> For the production-merge contract, see [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
+> Source specs live in [`docs/`](docs/): the Worker Agent Library (v1 + the
+> authoritative **[v2 spec](docs/AgentNexLiFy_Agent_Library_v2.md)**) and the
+> Product Plan. **v2: the owner talks to 8 department-head agents** (Sales,
+> Marketing, Customer Service, Operations, Invoicing & Collections, Accounting &
+> Finance, Customer Data & Administration, People Management); each bundles the
+> former specialist workers as internal skills. See [`DEMO.md`](DEMO.md) for the
+> walkthrough and [`docs/INTEGRATION.md`](docs/INTEGRATION.md) for the merge contract.
 
 > **Live demo:** https://agent-nexlify-os.vercel.app — opens straight into the
 > orchestrator as Maya (demo bypass; no login). All 6 demo beats run against the

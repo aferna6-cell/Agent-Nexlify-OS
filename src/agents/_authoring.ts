@@ -13,6 +13,7 @@ import type { BusinessProfileData } from "../types/agent.js";
 const PROFILE_FIELDS: { key: keyof BusinessProfileData; label: string }[] = [
   { key: "businessName", label: "Business name" },
   { key: "ownerName", label: "Owner name" },
+  { key: "businessType", label: "Business type" },
   { key: "industry", label: "Industry" },
   { key: "city", label: "City" },
   { key: "state", label: "State" },

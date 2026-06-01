@@ -6,6 +6,9 @@ export interface BusinessProfileData {
   businessName?: string;
   ownerName?: string;
   industry?: string;
+  /** v2: industry cluster id (e.g. "automotive") + specific type (e.g. "Tire shop"). */
+  industryCluster?: string;
+  businessType?: string;
   city?: string;
   state?: string;
   phone?: string;

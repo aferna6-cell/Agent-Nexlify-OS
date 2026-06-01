@@ -18,3 +18,4 @@ plan.txt
 test-results/
 playwright-report/
 .playwright/
+tsconfig.tsbuildinfo

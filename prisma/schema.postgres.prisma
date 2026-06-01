@@ -83,6 +83,12 @@ model BusinessProfile {
   businessName String?
   ownerName    String?
   industry     String?
+  // v2 (Direction v2 Decision 3): 2-step industry picker. `industryCluster` is
+  // one of the 8 clusters (loads the vertical pack); `businessType` is the
+  // specific type within it (tunes copy + example asks). `industry` stays for
+  // back-compat / free-text.
+  industryCluster String?
+  businessType    String?
   city         String?
   state        String?
   phone        String?

@@ -44,27 +44,38 @@ export function classifyHeuristic(ask: string): Classification {
     return { agentId: agent.agent_id, score };
   });
 
-  // A day-of-week + clock time strongly implies scheduling, even without an
-  // explicit booking keyword ("Mike called wanting a tire rotation Thursday at 10:30").
+  // v2 department-level routing boosts. Intra-department skill choice (e.g.
+  // quote_follow_up vs quote_generator) is handled later by pickSkill, so these
+  // only need to land the ask in the right DEPARTMENT.
+
+  // A day-of-week + clock time strongly implies scheduling → Operations, even
+  // without an explicit booking keyword ("Mike called wanting a tire rotation
+  // Thursday at 10:30").
   const dayTime =
     /\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b/i.test(ask) && /\b(\d{1,2}:\d{2}|\d{1,2}\s*(?:am|pm))\b/i.test(ask);
   if (dayTime) {
-    const b = scored.find((c) => c.agentId === "booking");
+    const b = scored.find((c) => c.agentId === "operations");
     if (b) b.score += 4;
   }
 
-  // §11 rule 6 — complaint language short-circuits Customer Question.
+  // Complaint language → Customer Service (the orchestrator also short-circuits
+  // here; this keeps the heuristic candidate ordering sensible).
   if (complaintLanguage(ask)) {
-    const ch = scored.find((c) => c.agentId === "complaint_handler");
+    const ch = scored.find((c) => c.agentId === "customer_service");
     if (ch) ch.score += 5;
   }
-  // §11 rule 5 — "quote" + follow-up wording → Quote Follow-up (the $ amount can
-  // come from pipeline state). Excludes drafting wording so "draft a quote …"
-  // still routes to Quote Generator.
-  const drafting = /(draft (a|an) (quote|estimate)|write up|make a proposal|estimate for)/.test(a);
-  if (a.includes("quote") && /(follow up|follow-up|chase|didn'?t book|hasn'?t booked)/.test(a) && !drafting) {
-    const qf = scored.find((c) => c.agentId === "quote_follow_up");
-    if (qf) qf.score += 5;
+
+  // Hiring / HR / staff language → People (disambiguates from Marketing, since a
+  // "Craigslist post" for an employee is a People task, not a marketing post).
+  if (/\b(hire|hiring|job post|craigslist|interview|employee|payroll|staff|new hire|training (doc|checklist)|handbook|write[- ]?up)\b/i.test(ask)) {
+    const p = scored.find((c) => c.agentId === "people");
+    if (p) p.score += 8; // decisive: a job/HR post is People, not Marketing
+  }
+
+  // Document / contract / CRM language → Customer Data & Administration.
+  if (/\b(contract|agreement|intake form|service agreement|refund policy|one[- ]?pager|sop|template|update (his|her|their|the) record)\b/i.test(ask)) {
+    const ar = scored.find((c) => c.agentId === "admin_records");
+    if (ar) ar.score += 4;
   }
 
   const candidates = scored

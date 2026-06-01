@@ -53,6 +53,13 @@ export async function POST(req: Request) {
           return;
         }
 
+        if (result.status === "declined") {
+          // Non-business ask — polite decline, no draft (v2 Decision 2).
+          if (result.orchestratorNotes.length) send("notes", { notes: result.orchestratorNotes });
+          send("done", {});
+          return;
+        }
+
         if (result.status === "needs_clarification") {
           send("clarify", {
             decisionId: result.decisionId,

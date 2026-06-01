@@ -30,6 +30,8 @@ async function main() {
       businessName: "Sunset Auto Care",
       ownerName: "Maya",
       industry: "auto repair",
+      industryCluster: "automotive",
+      businessType: "Auto repair shop",
       city: "Phoenix",
       state: "AZ",
       phone: "(602) 555-0148",
