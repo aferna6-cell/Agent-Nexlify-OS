@@ -32,6 +32,8 @@ function toProfile(row: Awaited<ReturnType<typeof db.businessProfile.findUnique>
     businessName: row.businessName ?? undefined,
     ownerName: row.ownerName ?? undefined,
     industry: row.industry ?? undefined,
+    industryCluster: row.industryCluster ?? undefined,
+    businessType: row.businessType ?? undefined,
     city: row.city ?? undefined,
     state: row.state ?? undefined,
     phone: row.phone ?? undefined,
