@@ -124,19 +124,42 @@ function parseHaiku(text: string): HaikuRouting | null {
   }
 }
 
+/**
+ * Map a model-returned id to a registered DEPARTMENT id. Haiku is prompted with
+ * the 8 departments, but it occasionally returns a known SKILL name (e.g.
+ * "booking" instead of "operations"). Rather than discard that and fall back to
+ * the heuristic (which is why Operations sometimes showed up labeled
+ * "heuristic"), map the skill back to its owning department so Haiku routing
+ * holds. Returns the id if it's already a routable department.
+ */
+function toRoutableId(id: string | undefined): string | undefined {
+  if (!id) return undefined;
+  if (registry.has(id) && registry.get(id).channel !== "internal") return id;
+  const dept = registry.routable().find((d) => {
+    const spec = (d as { __department?: { skills: { agent: { agent_id: string } }[] } }).__department;
+    return spec?.skills.some((s) => s.agent.agent_id === id);
+  });
+  return dept?.agent_id;
+}
+
 export async function classifyWithHaiku(ask: string, runId?: string): Promise<Classification | null> {
   if (!isModelAvailable()) return null;
   const { system, prompt } = buildRoutingPrompt(ask);
   try {
     const res = await complete({ purpose: "routing", system, prompt, maxTokens: 400, runId });
     const parsed = parseHaiku(res.text);
-    if (!parsed?.routed_to || !registry.has(parsed.routed_to)) return null;
+    if (!parsed) return null;
+    const routedTo = toRoutableId(parsed.routed_to);
+    if (!routedTo) return null;
 
+    const altCandidates: Candidate[] = [];
+    for (const x of parsed.alternates ?? []) {
+      const id = toRoutableId(x.agent_id);
+      if (id && id !== routedTo) altCandidates.push({ agentId: id, confidence: clamp(x.confidence ?? 0) });
+    }
     const candidates: Candidate[] = [
-      { agentId: parsed.routed_to, confidence: clamp(parsed.confidence ?? 0.5) },
-      ...(parsed.alternates ?? [])
-        .filter((x): x is { agent_id: string; confidence?: number } => !!x.agent_id && registry.has(x.agent_id))
-        .map((x) => ({ agentId: x.agent_id, confidence: clamp(x.confidence ?? 0) })),
+      { agentId: routedTo, confidence: clamp(parsed.confidence ?? 0.5) },
+      ...altCandidates,
     ];
     const params = parsed.extracted_params ?? extractParams(ask);
     return { classifier: "haiku", candidates, params };
@@ -150,7 +173,16 @@ function clamp(n: number): number {
   return Math.max(0, Math.min(1, Number(n) || 0));
 }
 
-/** Classify an ask: Haiku when available, else the heuristic fallback. */
+/**
+ * Classify an ask: Haiku when available, else the heuristic fallback.
+ *
+ * V-04: there is NO confidence "fast-path" that skips Haiku — every department,
+ * including Operations/booking, goes through the same path. Haiku is always
+ * attempted first when a key is present; the heuristic only runs as a genuine
+ * fallback when Haiku is unavailable, errors, or returns an unmappable result
+ * (see toRoutableId). So a "heuristic" label in the UI always means
+ * fallback-was-used, never a deliberate shortcut.
+ */
 export async function classify(ask: string, runId?: string): Promise<Classification> {
   const viaHaiku = await classifyWithHaiku(ask, runId);
   if (viaHaiku && viaHaiku.candidates.length > 0) return viaHaiku;

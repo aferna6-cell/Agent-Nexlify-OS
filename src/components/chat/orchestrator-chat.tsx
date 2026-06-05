@@ -133,13 +133,17 @@ export function OrchestratorChat() {
     }
   }
 
+  async function send(ask: string) {
+    const trimmed = ask.trim();
+    if (!trimmed || busy) return;
+    setInput("");
+    setMessages((prev) => [...prev, { role: "owner", text: trimmed }]);
+    await runAsk(trimmed);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const ask = input.trim();
-    if (!ask || busy) return;
-    setInput("");
-    setMessages((prev) => [...prev, { role: "owner", text: ask }]);
-    await runAsk(ask);
+    await send(input);
   }
 
   async function pick(msgIndex: number, ask: string, agentId: string, decisionId?: string) {
@@ -213,7 +217,8 @@ export function OrchestratorChat() {
                   <button
                     key={s}
                     className="rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
-                    onClick={() => setInput(s)}
+                    onClick={() => void send(s)}
+                    disabled={busy}
                   >
                     {s}
                   </button>
@@ -228,12 +233,13 @@ export function OrchestratorChat() {
               </div>
             ) : (
               <div key={i} className="max-w-xl space-y-2">
-                {/* Routing decision */}
+                {/* Routing decision. V-04: label the routing method clearly —
+                    "haiku" = AI routing; "heuristic" = offline/fallback routing. */}
                 {m.displayName && (
                   <div className="text-xs text-muted-foreground">
                     I&rsquo;m picking the <span className="font-medium text-foreground">{m.displayName}</span> agent
                     {typeof m.confidence === "number" ? ` (${Math.round(m.confidence * 100)}%` : ""}
-                    {m.classifier ? `, ${m.classifier}` : ""}
+                    {m.classifier ? `, ${m.classifier === "haiku" ? "AI routing" : "fallback routing"}` : ""}
                     {typeof m.confidence === "number" ? ")" : ""} — sound right?
                   </div>
                 )}
