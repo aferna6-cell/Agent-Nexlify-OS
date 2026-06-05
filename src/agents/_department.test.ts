@@ -84,6 +84,38 @@ describe("department dispatch produces drafts", () => {
   });
 });
 
+describe("V-03 — first-name greeting consistency", () => {
+  // The local composer drives these deterministically; each customer-facing
+  // department should greet by first name when the orchestrator extracts one.
+  it("Customer Service greets by first name", async () => {
+    const out = await run(customerService, "A customer named Aisha asked: do you service hybrids? Draft a reply.");
+    expect(out.draft!.body).toMatch(/\bAisha\b/);
+    expect(out.draft!.body).not.toMatch(/Hi there/i);
+  });
+
+  it("Operations greets by first name", async () => {
+    const out = await run(operations, "Confirm Mike Johnson's tire rotation Thursday at 10:30.");
+    expect(out.draft!.body).toMatch(/Hi Mike\b/);
+    expect(out.draft!.body).not.toMatch(/Mike Johnson,/);
+  });
+
+  it("Invoicing greets by first name", async () => {
+    const ctx = fullContext();
+    const { emitter } = fakeEmitter();
+    const out = await invoicing.run({
+      input: extractParams("Send Mike Johnson a reminder about his $1,100 invoice, 8 days overdue."),
+      context: ctx, emitTrace: emitter, ownerAsk: "Send Mike Johnson a reminder about his $1,100 invoice, 8 days overdue.", runId: "",
+    });
+    expect(out.draft!.body).toMatch(/\bMike\b/);
+    expect(out.draft!.body).not.toMatch(/Mike Johnson,/);
+  });
+
+  it("Sales (nurture) greets by first name", async () => {
+    const out = await run(sales, "Reach out to a lapsed customer named Tom Wallace.");
+    expect(out.draft?.body ?? "").toMatch(/\bTom\b/);
+  });
+});
+
 describe("V-02 — Sales pipeline-aware skill selection", () => {
   // Context with Sarah's existing open quote (the regression scenario).
   const ctxWithQuote = fullContext({

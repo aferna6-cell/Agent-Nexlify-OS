@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName, greetingInstruction } from "../_authoring.js";
 import { finishBody, money, parseMoney } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -85,6 +85,7 @@ export const paymentFollowUp = defineAgent(
 
     const system =
       `${a.promptBlock()}\n\n` +
+      greetingInstruction(name === "there" ? undefined : name) +
       `You draft ONE payment-reminder message at escalation level ${level} (1=firm friendly, 2=formal, 3=final notice) ` +
       `on the SEQUENCE channel. HARD RULES: never use threatening, accusatory, or aggressive language; never reference ` +
       `specific legal action (no lawyers, lawsuits, liens, or collections agencies by name) — only general "next steps will ` +

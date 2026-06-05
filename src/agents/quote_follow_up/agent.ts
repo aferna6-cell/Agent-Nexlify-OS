@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName, greetingInstruction } from "../_authoring.js";
 import { finishBody, money, parseMoney } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -84,6 +84,7 @@ export const quoteFollowUp = defineAgent(
 
     const system =
       `${a.promptBlock()}\n\n` +
+      greetingInstruction(name === "there" ? undefined : name) +
       `You draft a ${touchCount}-touch follow-up SEQUENCE (markdown allowed) for an unresponded QUOTE of ${amt} for ${scope}. ` +
       `Use relative dates (Today / +7 days / +14 days). Quote-specific framing: softer than chasing payment, sharper than generic nurture. ` +
       `Reference the amount and scope in each touch.` +

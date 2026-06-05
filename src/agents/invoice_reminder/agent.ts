@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName, greetingInstruction } from "../_authoring.js";
 import { finishBody, money, parseMoney } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -84,6 +84,7 @@ export const invoiceReminder = defineAgent(
 
     const system =
       `${a.promptBlock()}\n\n` +
+      greetingInstruction(name === "there" ? undefined : name) +
       `You draft a polite FIRST-TOUCH invoice reminder on the EMAIL channel (markdown allowed, but keep it brief). ` +
       `Assume the customer simply forgot — warm, not accusatory; no threats. Mention the invoice ${invoiceNumber ?? ""} and amount ${money(amount)}${overdueClause ? `, which is ${daysOverdue} days past due` : ""}. ` +
       `Do NOT add any meta notes, bracketed placeholders, or "[unknown]" text — use only the real values given. ` +

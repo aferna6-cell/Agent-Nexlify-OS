@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName, greetingInstruction } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput } from "../../types/agent.js";
@@ -77,6 +77,7 @@ export const leadNurture = defineAgent(
 
     const system =
       `${a.promptBlock()}\n\n` +
+      greetingInstruction(name === "there" ? undefined : name) +
       `You draft a ${touchCount}-touch follow-up sequence to re-engage a prospect, on the SEQUENCE channel ` +
       `(markdown allowed). Use RELATIVE dates as section labels — "Touch 1 — Today", "Touch 2 — +5 days", ` +
       `"Touch 3 — +14 days" — never "Day 1 / Day 5". The timing language inside each touch must match its label ` +
