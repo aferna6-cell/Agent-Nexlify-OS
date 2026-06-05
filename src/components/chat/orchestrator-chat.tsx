@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TraceView } from "@/components/reasoning-trace/trace-view";
 import { DraftPanel, type DraftData } from "@/components/draft-panel/draft-panel";
@@ -58,13 +58,43 @@ function parseSSE(buffer: string): { events: { event: string; data: string }[]; 
   return { events, rest };
 }
 
-export function OrchestratorChat() {
+export function OrchestratorChat({ storageKey = "demo" }: { storageKey?: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeDraft, setActiveDraft] = useState<DraftData | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const idxRef = useRef(-1);
+  const lsKey = `agentos:chat:${storageKey}`;
+
+  // V-05: hydrate chat history + task list from localStorage on mount so
+  // navigating away (e.g. to /admin/costs) and back — or reloading — doesn't
+  // wipe the session. Keyed by user so different owners don't collide.
+  useEffect(() => {
+    try {
+      const raw = typeof window !== "undefined" ? window.localStorage.getItem(lsKey) : null;
+      if (raw) {
+        const saved = JSON.parse(raw) as { messages?: Message[]; tasks?: Task[] };
+        if (Array.isArray(saved.messages)) setMessages(saved.messages);
+        if (Array.isArray(saved.tasks)) setTasks(saved.tasks);
+      }
+    } catch {
+      // ignore corrupt storage
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lsKey]);
+
+  // Persist on change (cap history to the 50 most recent tasks to avoid bloat).
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      window.localStorage.setItem(lsKey, JSON.stringify({ messages: messages.slice(-100), tasks: tasks.slice(0, 50) }));
+    } catch {
+      // storage full / unavailable — non-fatal
+    }
+  }, [messages, tasks, hydrated, lsKey]);
 
   function patch(fn: (m: AssistantMessage) => AssistantMessage) {
     setMessages((prev) => {
