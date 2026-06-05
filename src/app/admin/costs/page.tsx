@@ -47,6 +47,9 @@ export default async function CostsPage() {
 
   const caps = await capStatus();
   const modelOn = isModelAvailable();
+  // Cross-request cost tracking only works on a shared DB. A non-"file:" URL
+  // (Postgres) means totals aggregate correctly across serverless instances.
+  const hasSharedDb = !(process.env.DATABASE_URL ?? "").startsWith("file:");
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -55,8 +58,16 @@ export default async function CostsPage() {
         <Link href="/admin/routing" className="text-sm text-accent underline">routing →</Link>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Every model call is logged. Routing → Haiku, drafts → Sonnet (cost $0 when the offline local composer is used).
+        Every model call is logged to the database. Routing → Haiku, drafts → Sonnet ($0 when the offline
+        composer is used). Totals aggregate across all requests when a shared database (Postgres) is configured.
       </p>
+      {!hasSharedDb && (
+        <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Note: this deployment uses per-instance SQLite, so each serverless function has its own copy of the
+          log — totals here reflect only this instance and will read low. Set a Postgres <code>DATABASE_URL</code>
+          for accurate cross-request cost tracking (see README → Production cost tracking).
+        </p>
+      )}
 
       <div className="mt-6 grid grid-cols-4 gap-3">
         <Stat label="Total cost" value={usd(totalCost)} />

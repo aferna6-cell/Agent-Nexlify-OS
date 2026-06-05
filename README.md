@@ -66,6 +66,26 @@ npm run dev
 This path is verified end-to-end (schema push, seed, and the orchestrator/agents
 running against real Postgres).
 
+### Production cost tracking (shared database)
+
+The self-contained Vercel demo uses SQLite copied to each serverless instance's
+`/tmp` — so cost/usage rows written by one request aren't visible to another,
+and `/admin/costs` reads low (it shows a banner saying so). For accurate
+cross-request telemetry, point the deployment at a **shared Postgres**:
+
+1. Provision a Vercel Postgres / Neon database and set `DATABASE_URL` (a
+   `postgresql://…` URL) in the Vercel project's environment variables.
+2. Initialize it once: `npm run db:init:prod` (pushes the schema + seeds), run
+   locally against that `DATABASE_URL`, or as a one-off task.
+3. Redeploy. The build auto-selects the Postgres Prisma client
+   (`scripts/prisma-generate.mjs` picks `schema.postgres.prisma` when
+   `DATABASE_URL` is Postgres), and `resolveDatabaseUrl` uses the real URL
+   instead of the `/tmp` copy.
+
+With a shared DB, `/admin/costs` aggregates total cost / calls / tokens / per-model
+/ per-agent / daily caps correctly across all requests, and the task list and
+usage caps become globally consistent too.
+
 ### Browser E2E tests (Playwright)
 
 ```bash
