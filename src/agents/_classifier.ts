@@ -65,9 +65,19 @@ export function classifyHeuristic(ask: string): Classification {
     if (ch) ch.score += 5;
   }
 
+  // Tax / financial language → Accounting. Checked BEFORE People so "payroll
+  // TAX / quarterly filings" (a finance task) doesn't get grabbed by the People
+  // "payroll" keyword (which is about paying/managing staff).
+  const taxFinance = /\b(tax|taxes|quarterly|941|940|irs|deduction|filing|revenue|receivables|cash flow|profit|expenses?|bookkeep)\b/i.test(ask);
+  if (taxFinance) {
+    const ac = scored.find((c) => c.agentId === "accounting");
+    if (ac) ac.score += 7;
+  }
+
   // Hiring / HR / staff language → People (disambiguates from Marketing, since a
   // "Craigslist post" for an employee is a People task, not a marketing post).
-  if (/\b(hire|hiring|job post|craigslist|interview|employee|payroll|staff|new hire|training (doc|checklist)|handbook|write[- ]?up)\b/i.test(ask)) {
+  // Exclude tax/finance asks so "payroll taxes" stays with Accounting above.
+  if (!taxFinance && /\b(hire|hiring|job post|craigslist|interview|employee|payroll|staff|new hire|training (doc|checklist)|handbook|write[- ]?up)\b/i.test(ask)) {
     const p = scored.find((c) => c.agentId === "people");
     if (p) p.score += 8; // decisive: a job/HR post is People, not Marketing
   }

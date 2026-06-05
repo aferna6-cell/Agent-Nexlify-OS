@@ -45,6 +45,14 @@ describe("heuristic routing to departments — exit criterion (≥8/10)", () => 
     }
     expect(correct, `misses: ${misses.join("; ")}`).toBeGreaterThanOrEqual(8);
   });
+
+  it("payroll TAX → Accounting, but running payroll / hiring → People (V-C2)", () => {
+    const top = (ask: string) => classifyHeuristic(ask).candidates[0]?.agentId;
+    expect(top("Help me figure out my quarterly payroll tax filings.")).toBe("accounting");
+    expect(top("Remind me what I need to gather for quarterly taxes.")).toBe("accounting");
+    expect(top("Help me run payroll for my two employees.")).toBe("people");
+    expect(top("Write a Craigslist post for a part-time mechanic.")).toBe("people");
+  });
 });
 
 describe("intra-department skill dispatch (Sales)", () => {
