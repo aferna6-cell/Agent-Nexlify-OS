@@ -46,6 +46,17 @@ export function firstName(full: string | undefined): string | undefined {
   return first && first.length > 0 ? first.replace(/[^A-Za-z'-]/g, "") || undefined : undefined;
 }
 
+/**
+ * Shared greeting instruction for customer-facing system prompts (V-03). Pass the
+ * resolved first name (or undefined). Keeps greetings consistent across every
+ * department so the LLM doesn't drift to "Hi there" when a name is known.
+ */
+export function greetingInstruction(name: string | undefined): string {
+  return name
+    ? `Greet the customer by first name: "Hi ${name}," (never the full name, which reads stilted). `
+    : `No customer name is known — open with a neutral "Hi there," or "Hello,". `;
+}
+
 /** The names of the profile fields that actually have data (for the honest trace). */
 export function presentProfileFields(profile: BusinessProfileData): string[] {
   return PROFILE_FIELDS.map((f) => f.key).filter((k) => resolveField(profile, k) !== undefined);

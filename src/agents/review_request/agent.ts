@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, resolveField, firstName } from "../_authoring.js";
+import { Authoring, presentProfileFields, resolveField, firstName, greetingInstruction } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput, BusinessProfileData } from "../../types/agent.js";
@@ -84,6 +84,7 @@ export const reviewRequest = defineAgent(
 
     const system =
       `${a.promptBlock()}\n\n` +
+      greetingInstruction(name === "there" ? undefined : name) +
       `You draft ONE short, warm review-request SMS on the SMS channel: plain text only, no markdown. ` +
       (hasLink ? `Include the ${platform} review link exactly: ${link}.` : `You do NOT have a ${platform} review link — do NOT invent one; promise to send it.`) +
       (signoff ? ` Sign off as ${signoff}.` : "");

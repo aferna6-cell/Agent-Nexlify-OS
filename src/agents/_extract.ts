@@ -25,6 +25,10 @@ function extractName(ask: string): string | undefined {
   const poss = ask.match(/\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)'s\b/);
   if (poss && !STOPWORDS.has(poss[1]!.toLowerCase())) return poss[1];
 
+  // Explicit "named X" / "customer named X" / "a lead named X".
+  const named = ask.match(/\bnamed\s+([A-Z][a-z]+(?: [A-Z][a-z]+)?)/);
+  if (named && !STOPWORDS.has(named[1]!.toLowerCase())) return named[1];
+
   const tokens = ask.split(/\s+/);
   for (let i = 0; i < tokens.length - 1; i++) {
     const w = tokens[i]!.toLowerCase().replace(/[^a-z]/g, "");

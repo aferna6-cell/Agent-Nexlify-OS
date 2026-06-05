@@ -50,6 +50,31 @@ export const sales = defineDepartment({
     { agent: leadNurture, extraKeywords: ["re-engage", "reach out", "lapsed", "haven't seen", "referral"] },
   ],
   defaultSkillId: "lead_nurture",
+  // V-02: pipeline-aware skill selection. "Follow up with X on her quote" must
+  // pull X's existing quote and run quote-followup, NOT quote-generation (which
+  // would ask for line items the owner didn't give). New line items in the ask
+  // → quote-generation; a named customer with an open quote + follow-up intent
+  // → quote-followup; a named customer with no quote → lead nurture.
+  resolveSkill: ({ ownerAsk, params, context }) => {
+    const a = ownerAsk.toLowerCase();
+    // Explicit new-quote drafting with line items always generates.
+    const hasLineItems = /\$\s?\d/.test(ownerAsk) && /(parts|labor|part|materials|each|qty|x\d)/i.test(ownerAsk);
+    if (/\b(draft|write up|create|generate|make)\b.*\bquote\b/.test(a) || hasLineItems) return "quote_generator";
+
+    const followUpIntent = /\b(follow up|follow-up|check in|chase|circle back|nudge|touch base)\b/.test(a);
+    if (!followUpIntent) return undefined; // keyword scoring handles the rest
+
+    const name = typeof params.customer_name === "string" ? params.customer_name.trim().toLowerCase() : "";
+    const lead = name
+      ? context.pipelineLeads.find(
+          (l) => l.name.toLowerCase().includes(name) && l.quoteAmount && !["won", "lost", "accepted", "cancelled"].includes(l.status.toLowerCase()),
+        )
+      : undefined;
+    if (lead) return "quote_follow_up"; // existing open quote → follow up on it
+    // Follow-up intent but no open quote on file → warm nurture, never a fabricated
+    // quote. (Covers "follow up with a lead I haven't quoted yet".)
+    return "lead_nurture";
+  },
   examples: [
     { owner_ask: "Follow up with Sarah Chen on her brake quote.", expected_route: "sales", expected_output_excerpt: "quote" },
     { owner_ask: "Draft a quote for Mike Johnson, parts $620, labor $480, net 15 terms.", expected_route: "sales", expected_output_excerpt: "Total" },

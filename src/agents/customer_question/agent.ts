@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineAgent } from "../_schema.js";
-import { Authoring, presentProfileFields, firstName } from "../_authoring.js";
+import { Authoring, presentProfileFields, firstName, greetingInstruction } from "../_authoring.js";
 import { finishBody } from "../_format.js";
 import { generateDraft } from "../../lib/draft.js";
 import type { AgentOutput, KbEntry, SharedContext } from "../../types/agent.js";
@@ -107,6 +107,7 @@ export const customerQuestion = defineAgent(
       `${a.promptBlock()}\n\n` +
       `You draft a short, warm customer-facing reply (1–3 short paragraphs) on the WIDGET channel: ` +
       `plain text only, no markdown. ` +
+      greetingInstruction(firstName(customerName)) +
       (kbHasAnswer
         ? `Answer the question using the knowledge-base facts provided; do not invent details.`
         : `You do NOT have the information needed to answer accurately. Write a SAFE HOLDING REPLY that ` +
