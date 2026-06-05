@@ -21,7 +21,7 @@
  */
 
 import { defineAgent, PLAIN_TEXT_CHANNELS, type Agent, type AgentBucket, type AgentChannel } from "./_schema.js";
-import type { AgentOutput, AgentRunArgs } from "../types/agent.js";
+import type { AgentOutput, AgentRunArgs, SharedContext } from "../types/agent.js";
 
 export interface DepartmentSkill {
   /** The underlying v1 agent acting as this skill. */
@@ -43,6 +43,17 @@ export interface DepartmentSpec {
   skills: DepartmentSkill[];
   /** Skill chosen when nothing scores (e.g. a department's safe default). */
   defaultSkillId: string;
+  /**
+   * Optional context-aware override (e.g. Sales inspects pipeline state to pick
+   * quote-followup vs quote-generation). Return a skill agent_id to force it, or
+   * undefined to fall back to keyword scoring. `params` are the orchestrator's
+   * extracted params; `context` is the SharedContext.
+   */
+  resolveSkill?: (args: {
+    ownerAsk: string;
+    params: Record<string, unknown>;
+    context: SharedContext;
+  }) => string | undefined;
   examples: { owner_ask: string; expected_route: string; expected_output_excerpt: string }[];
 }
 
@@ -104,10 +115,16 @@ export function defineDepartment(spec: DepartmentSpec): DepartmentAgent {
       examples: spec.examples,
     },
     async (args: AgentRunArgs): Promise<AgentOutput> => {
-      const skill = pickSkill(spec, args.ownerAsk);
+      // Context-aware override first (e.g. Sales pipeline lookup), else keyword scoring.
+      let skill: DepartmentSkill | undefined;
+      const forcedId = spec.resolveSkill?.({ ownerAsk: args.ownerAsk, params: args.input, context: args.context });
+      if (forcedId) skill = spec.skills.find((s) => s.agent.agent_id === forcedId);
+      if (!skill) skill = pickSkill(spec, args.ownerAsk);
+
+      // Make the skill decision visible in the reasoning trace (V-02).
+      await args.emitTrace.work("select_skill", `${spec.display_name} → ${skill.agent.display_name} skill`);
+
       const out = await skill.agent.run(args);
-      // Tag which skill handled it (useful for /admin and debugging) without
-      // disturbing the draft the skill produced.
       out.orchestratorNotes = out.orchestratorNotes ?? [];
       return out;
     },
