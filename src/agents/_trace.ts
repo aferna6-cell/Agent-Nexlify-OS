@@ -8,7 +8,7 @@
  * when an `onStep` callback is provided, streamed to the client as they happen.
  */
 
-import { db } from "../lib/db.js";
+import { getRunStore } from "../lib/providers/run-store.js";
 import type { StreamedTraceStep, TraceEmitter } from "../types/agent.js";
 
 /** True when loaded evidence is meaningfully non-empty. */
@@ -41,15 +41,13 @@ export function createTraceEmitter(runId: string, opts: TraceEmitterOptions = {}
     opts.onStep?.({ step, status, description });
     if (!persist) return;
     try {
-      await db.traceStep.create({
-        data: {
-          runId,
-          ordinal: current,
-          step,
-          status,
-          description,
-          dataSnapshot: dataSnapshot === undefined ? null : JSON.stringify(dataSnapshot),
-        },
+      await getRunStore().recordTraceStep({
+        runId,
+        ordinal: current,
+        step,
+        status,
+        description,
+        dataSnapshot,
       });
     } catch {
       // Tracing must never break a run.

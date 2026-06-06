@@ -10,7 +10,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { db } from "./db.js";
+import { getRunStore } from "./providers/run-store.js";
 import { isCapExceeded } from "./usage.js";
 
 export type ModelPurpose = "routing" | "draft" | "other";
@@ -131,17 +131,15 @@ async function logCall(args: {
   error?: string;
 }): Promise<void> {
   try {
-    await db.modelCallLog.create({
-      data: {
-        runId: args.runId && args.runId.length > 0 ? args.runId : null,
-        purpose: args.purpose,
-        model: args.model,
-        inputTokens: args.inputTokens,
-        outputTokens: args.outputTokens,
-        costUsd: args.costUsd,
-        ok: args.ok,
-        error: args.error ?? null,
-      },
+    await getRunStore().logModelCall({
+      runId: args.runId,
+      purpose: args.purpose,
+      model: args.model,
+      inputTokens: args.inputTokens,
+      outputTokens: args.outputTokens,
+      costUsd: args.costUsd,
+      ok: args.ok,
+      error: args.error,
     });
   } catch {
     // Never let cost logging break a request.
