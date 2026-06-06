@@ -65,8 +65,11 @@ export function presentProfileFields(profile: BusinessProfileData): string[] {
 export class Authoring {
   readonly notes: string[] = [];
   private readonly gaps = new Set<keyof BusinessProfileData>();
+  private readonly profile: BusinessProfileData;
 
-  constructor(private readonly profile: BusinessProfileData) {}
+  constructor(profile: BusinessProfileData) {
+    this.profile = profile;
+  }
 
   /** Real value, or undefined + a one-time orchestrator gap note. */
   field(key: keyof BusinessProfileData): string | undefined {

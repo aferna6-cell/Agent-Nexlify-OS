@@ -42,8 +42,10 @@ export class ModelUnavailableError extends Error {
 
 /** Thrown when the daily usage cap for a purpose is hit (offline fallback then applies). */
 export class UsageCapExceededError extends Error {
-  constructor(public readonly purpose: "routing" | "draft", message = `Daily ${purpose} usage cap reached`) {
+  readonly purpose: "routing" | "draft";
+  constructor(purpose: "routing" | "draft", message = `Daily ${purpose} usage cap reached`) {
     super(message);
+    this.purpose = purpose;
     this.name = "UsageCapExceededError";
   }
 }
