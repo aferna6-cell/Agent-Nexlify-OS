@@ -55,3 +55,37 @@ describe("agents are datasource-agnostic", () => {
     expect(offenders, `these agents import lib/db directly: ${offenders.join(", ")}`).toEqual([]);
   });
 });
+
+/**
+ * The portable engine — everything that gets vendored into the production
+ * agent-service — must also be Prisma-free, reading through SharedContext and
+ * writing through RunStore. Only the three environment-specific wiring files
+ * (`_shared-context.ts`, `_run-store.ts`, `lib/usage.ts`) and `lib/db.ts` itself
+ * may touch Prisma; the agent-service ships its own versions of those. This guard
+ * is what would have caught `lib/draft.ts` writing ModelCallLog directly.
+ */
+describe("portable engine is datasource-agnostic", () => {
+  const LIB = join(process.cwd(), "src", "lib");
+  const AGENTS = join(process.cwd(), "src", "agents");
+
+  /** Engine modules that the agent-service vendors verbatim (must be db-free). */
+  function portableEngineFiles(): string[] {
+    const wiring = new Set(["_shared-context.ts", "_run-store.ts"]);
+    const agentTop = readdirSync(AGENTS)
+      .filter((n) => n.endsWith(".ts") && !n.endsWith(".test.ts") && !wiring.has(n))
+      .map((n) => join(AGENTS, n));
+    const lib = ["anthropic.ts", "draft.ts", "seo.ts"].map((n) => join(LIB, n));
+    return [...agentTop, ...lib];
+  }
+
+  it("no portable engine module imports lib/db", () => {
+    const offenders: string[] = [];
+    for (const f of portableEngineFiles()) {
+      const src = readFileSync(f, "utf8");
+      if (/from\s+["'][^"']*lib\/db(\.js)?["']/.test(src) || /import\s+["'][^"']*\/db\.js["']/.test(src)) {
+        offenders.push(f.replace(process.cwd() + "/", ""));
+      }
+    }
+    expect(offenders, `these engine modules import the db client directly: ${offenders.join(", ")}`).toEqual([]);
+  });
+});

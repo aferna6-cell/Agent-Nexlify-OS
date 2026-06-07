@@ -10,7 +10,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { db } from "./db.js";
+import { getRunStore } from "./providers/run-store.js";
 import { isCapExceeded } from "./usage.js";
 
 export type ModelPurpose = "routing" | "draft" | "other";
@@ -42,8 +42,10 @@ export class ModelUnavailableError extends Error {
 
 /** Thrown when the daily usage cap for a purpose is hit (offline fallback then applies). */
 export class UsageCapExceededError extends Error {
-  constructor(public readonly purpose: "routing" | "draft", message = `Daily ${purpose} usage cap reached`) {
+  readonly purpose: "routing" | "draft";
+  constructor(purpose: "routing" | "draft", message = `Daily ${purpose} usage cap reached`) {
     super(message);
+    this.purpose = purpose;
     this.name = "UsageCapExceededError";
   }
 }
@@ -131,17 +133,15 @@ async function logCall(args: {
   error?: string;
 }): Promise<void> {
   try {
-    await db.modelCallLog.create({
-      data: {
-        runId: args.runId && args.runId.length > 0 ? args.runId : null,
-        purpose: args.purpose,
-        model: args.model,
-        inputTokens: args.inputTokens,
-        outputTokens: args.outputTokens,
-        costUsd: args.costUsd,
-        ok: args.ok,
-        error: args.error ?? null,
-      },
+    await getRunStore().logModelCall({
+      runId: args.runId,
+      purpose: args.purpose,
+      model: args.model,
+      inputTokens: args.inputTokens,
+      outputTokens: args.outputTokens,
+      costUsd: args.costUsd,
+      ok: args.ok,
+      error: args.error,
     });
   } catch {
     // Never let cost logging break a request.

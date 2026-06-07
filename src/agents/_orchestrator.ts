@@ -12,7 +12,8 @@
  *  - forceAgentId         → owner override (re-route after seeing the decision).
  */
 
-import { db } from "../lib/db.js";
+import { getRunStore } from "../lib/providers/run-store.js";
+import "./_run-store.js";
 import { loadSharedContext } from "./_shared-context.js";
 import { createTraceEmitter } from "./_trace.js";
 import { registry } from "./_registry.js";
@@ -57,8 +58,8 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   if (!opts.forceAgentId && isWidgetQuery(ask)) {
     const ctx = await loadSharedContext(userId);
     const answer = summarizeWidget(ctx);
-    const decision = await db.routingDecision.create({
-      data: { userId, ask, classifier: "heuristic", decision: "direct_answer", chosenAgent: "orchestrator", confidence: 1 },
+    const decision = await getRunStore().createRoutingDecision({
+      userId, ask, classifier: "heuristic", decision: "direct_answer", chosenAgent: "orchestrator", confidence: 1,
     });
     return { status: "direct_answer", classifier: "heuristic", decisionId: decision.id, confidence: 1, alternates: [], params: {}, orchestratorNotes: [], answer };
   }
@@ -69,8 +70,8 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   if (!opts.forceAgentId && isAggregateBriefingQuery(ask)) {
     const ctx = await loadSharedContext(userId);
     const answer = aggregateBriefing(ctx);
-    const decision = await db.routingDecision.create({
-      data: { userId, ask, classifier: "heuristic", decision: "direct_answer", chosenAgent: "orchestrator", confidence: 1 },
+    const decision = await getRunStore().createRoutingDecision({
+      userId, ask, classifier: "heuristic", decision: "direct_answer", chosenAgent: "orchestrator", confidence: 1,
     });
     return { status: "direct_answer", classifier: "heuristic", decisionId: decision.id, confidence: 1, alternates: [], params: {}, orchestratorNotes: [], answer };
   }
@@ -78,8 +79,8 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   // --- Non-business asks → polite decline (v2 Decision 2: no Generalist) -------
   if (!opts.forceAgentId && isNonBusiness(ask)) {
     await captureWishlist(userId, ask, []);
-    const decision = await db.routingDecision.create({
-      data: { userId, ask, classifier: "heuristic", decision: "declined", chosenAgent: "none", confidence: 0 },
+    const decision = await getRunStore().createRoutingDecision({
+      userId, ask, classifier: "heuristic", decision: "declined", chosenAgent: "none", confidence: 0,
     });
     return {
       status: "declined",
@@ -101,9 +102,7 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   // --- Owner override -------------------------------------------------------
   if (opts.forceAgentId && registry.has(opts.forceAgentId)) {
     if (opts.overrodeDecisionId) {
-      await db.routingDecision
-        .update({ where: { id: opts.overrodeDecisionId }, data: { accepted: false, changedTo: opts.forceAgentId } })
-        .catch(() => undefined);
+      await getRunStore().markRoutingDecisionOverridden(opts.overrodeDecisionId, opts.forceAgentId);
     }
     const chosen = candidates.find((c) => c.agentId === opts.forceAgentId)?.confidence ?? 0;
     return runAndLog(userId, ask, opts.forceAgentId, chosen, candidates, cls.classifier, cls.params, "owner_override", opts.onStep);
@@ -131,8 +130,8 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
     await captureWishlist(userId, ask, candidates);
     if (!top) {
       // Nothing scored at all — decline gracefully rather than guess.
-      const decision = await db.routingDecision.create({
-        data: { userId, ask, classifier: cls.classifier, decision: "wishlist_fallback", chosenAgent: "none", confidence: 0 },
+      const decision = await getRunStore().createRoutingDecision({
+        userId, ask, classifier: cls.classifier, decision: "wishlist_fallback", chosenAgent: "none", confidence: 0,
       });
       return {
         status: "wishlist_fallback",
@@ -165,16 +164,14 @@ export async function handle(userId: string, ask: string, opts: HandleOptions = 
   if (second && gap < RESOLUTION_GAP) {
     const a = registry.get(top.agentId);
     const b = registry.get(second.agentId);
-    const decision = await db.routingDecision.create({
-      data: {
-        userId,
-        ask,
-        classifier: cls.classifier,
-        decision: "ambiguous",
-        chosenAgent: top.agentId,
-        confidence: top.confidence,
-        alternates: JSON.stringify(candidates),
-      },
+    const decision = await getRunStore().createRoutingDecision({
+      userId,
+      ask,
+      classifier: cls.classifier,
+      decision: "ambiguous",
+      chosenAgent: top.agentId,
+      confidence: top.confidence,
+      alternates: candidates,
     });
     return {
       status: "needs_clarification",
@@ -213,21 +210,17 @@ async function runAndLog(
 ): Promise<HandleResult> {
   const agent = registry.get(agentId);
 
-  const run = await db.agentRun.create({
-    data: { userId, agentId, ownerAsk: ask, params: JSON.stringify(params), status: "running" },
-  });
+  const run = await getRunStore().createRun({ userId, agentId, ownerAsk: ask, params });
 
-  const decision = await db.routingDecision.create({
-    data: {
-      userId,
-      runId: run.id,
-      ask,
-      classifier,
-      decision: decisionType,
-      chosenAgent: agentId,
-      confidence,
-      alternates: JSON.stringify(candidates),
-    },
+  const decision = await getRunStore().createRoutingDecision({
+    userId,
+    runId: run.id,
+    ask,
+    classifier,
+    decision: decisionType,
+    chosenAgent: agentId,
+    confidence,
+    alternates: candidates,
   });
 
   const emit = createTraceEmitter(run.id, { onStep });
@@ -238,7 +231,7 @@ async function runAndLog(
   try {
     output = await agent.run({ input: params, context, emitTrace: emit, ownerAsk: ask, runId: run.id, userId });
   } catch (err) {
-    await db.agentRun.update({ where: { id: run.id }, data: { status: "failed" } });
+    await getRunStore().setRunStatus(run.id, "failed");
     const message = err instanceof Error ? err.message : String(err);
     return {
       status: decisionType === "owner_override" ? "owner_override" : "routed",
@@ -255,21 +248,19 @@ async function runAndLog(
 
   let draftId: string | undefined;
   if (output.draft) {
-    const created = await db.draft.create({
-      data: {
-        runId: run.id,
-        agentId,
-        channel: output.draft.channel,
-        title: output.draft.title,
-        body: output.draft.body,
-        metadata: output.draft.metadata ? JSON.stringify(output.draft.metadata) : null,
-        requiresApproval: output.draft.requiresApproval,
-      },
+    const created = await getRunStore().createDraft({
+      runId: run.id,
+      agentId,
+      channel: output.draft.channel,
+      title: output.draft.title,
+      body: output.draft.body,
+      metadata: output.draft.metadata,
+      requiresApproval: output.draft.requiresApproval,
     });
     draftId = created.id;
-    await db.agentRun.update({ where: { id: run.id }, data: { status: "completed" } });
+    await getRunStore().setRunStatus(run.id, "completed");
   } else {
-    await db.agentRun.update({ where: { id: run.id }, data: { status: "no_draft" } });
+    await getRunStore().setRunStatus(run.id, "no_draft");
   }
 
   const status: DecisionStatus =
@@ -416,15 +407,7 @@ export function detectComplaint(ask: string): boolean {
 async function captureWishlist(userId: string, ask: string, candidates: Candidate[]): Promise<void> {
   const request = ask.trim();
   const considered = candidates.map((c) => c.agentId).join(",");
-  const existing = await db.wishlistItem.findFirst({ where: { userId, request } });
-  if (existing) {
-    await db.wishlistItem.update({
-      where: { id: existing.id },
-      data: { count: existing.count + 1, lastSeen: new Date(), consideredAgents: considered || existing.consideredAgents },
-    });
-  } else {
-    await db.wishlistItem.create({ data: { userId, request, consideredAgents: considered } });
-  }
+  await getRunStore().captureWishlist({ userId, request, consideredAgents: considered });
 }
 
 export { classify } from "./_classifier.js";

@@ -12,7 +12,7 @@
  * null and the agent surfaces the outage instead of a silent empty draft.
  */
 
-import { db } from "./db.js";
+import { getRunStore } from "./providers/run-store.js";
 import { complete, isModelAvailable } from "./anthropic.js";
 
 export type DraftSource = "model" | "local";
@@ -75,9 +75,7 @@ export async function generateDraft(opts: GenerateDraftOpts): Promise<GeneratedD
 
 async function logLocalCall(runId: string | undefined, model: string, ok: boolean, error?: string): Promise<void> {
   try {
-    await db.modelCallLog.create({
-      data: { runId: runId && runId.length > 0 ? runId : null, purpose: "draft", model, inputTokens: 0, outputTokens: 0, costUsd: 0, ok, error: error ?? null },
-    });
+    await getRunStore().logModelCall({ runId, purpose: "draft", model, inputTokens: 0, outputTokens: 0, costUsd: 0, ok, error });
   } catch {
     // cost logging must never break a run
   }
