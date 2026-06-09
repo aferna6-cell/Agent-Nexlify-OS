@@ -3,8 +3,14 @@
 The conversational surface for AgentNexLiFy, built as a standalone, demoable
 product. A small-business owner talks to one **orchestrator** in plain English;
 it routes the ask to the best-fit **worker agent**, which runs, streams an honest
-reasoning trace, and produces a draft for approval. The eventual goal is to merge
-it into the main codebase once it's production-ready.
+reasoning trace, and produces a draft for approval.
+
+> **MERGED (2026-06-09).** This engine now runs in production: it was vendored
+> into `agentnexlify/agent-service/src/agent-os/` and made the only agent path
+> (agentnexlify PRs #203–#208, #219 — cutover, real send, plan caps, dashboard
+> front door). **The canonical engine lives in the `agentnexlify` repo**; this
+> repo remains the spec + offline demo. Make engine changes there, not here.
+> Details: [`docs/PROD_MERGE_PLAN.md`](docs/PROD_MERGE_PLAN.md) status banner.
 
 > Source specs live in [`docs/`](docs/): the Worker Agent Library (v1 + the
 > authoritative **[v2 spec](docs/AgentNexLiFy_Agent_Library_v2.md)**) and the
