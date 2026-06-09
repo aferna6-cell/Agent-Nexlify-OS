@@ -1,5 +1,15 @@
 # Agent OS — Merge to Production Plan (v2, reconciled against live prod)
 
+> **STATUS (2026-06-09): MERGED AND LIVE IN PRODUCTION.** The v2 engine was
+> vendored into `agentnexlify/agent-service/src/agent-os/` (PRs #203–#208) and
+> the Phase 4 cutover shipped in agentnexlify PR #219: legacy Python agent
+> layer deleted, channel→action real send wired, plan-tier caps enforced,
+> Agent OS conversation is the dashboard front door. **The canonical engine
+> now lives in the `agentnexlify` repo; this repo is the spec + standalone
+> demo.** Engine changes land in `agentnexlify/agent-service/` first — do not
+> evolve `src/agents/` here expecting a future re-vendor. M1/M2 sections
+> below are kept for historical context.
+
 **Owner:** Aidan
 **Reconciled:** by Claude Code against the **live production Supabase** (`pxserpybmajixqrmzaly`) and the standalone repo.
 **Supersedes:** the original `Agent OS — Merge to Production Plan` (v1, 30 May), which predated knowledge of production's existing `os_*` Agent OS.
